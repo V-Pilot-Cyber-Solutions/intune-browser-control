@@ -1,0 +1,7 @@
+# Core template and deployment logic require V Pilot security approval
+/src/ @V-Pilot-Cyber-Solutions/Intune-Policy-Owners
+/tools/ @V-Pilot-Cyber-Solutions/Intune-Policy-Owners
+/.github/workflows/ @V-Pilot-Cyber-Solutions/Intune-Policy-Owners
+
+# DigiTrans policy changes require DigiTrans-specific review
+/tenants/digitrans/ @V-Pilot-Cyber-Solutions/Customer-DigiTrans-Reviewers
