@@ -1,0 +1,58 @@
+name: Publish browser control to Intune
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Policy version, for example DEV-7.1
+        required: true
+        default: DEV-7.1
+  push:
+    branches: [main]
+    paths: ['config/**','src/**','tools/**','.github/workflows/publish-to-intune.yml']
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: intune-browser-control
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: windows-latest
+    environment: intune-production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: pwsh
+        run: ./tools/Build-BrowserControl.ps1 -Version "${{ github.event.inputs.version || 'DEV-7.1' }}"
+      - name: Validate
+        shell: pwsh
+        run: ./tools/Validate-BrowserControl.ps1
+      - name: Azure login by OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Update existing Intune Platform Script
+        shell: pwsh
+        env:
+          INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
+          EXPECTED_DISPLAY_NAME: DigiTrans - Chrome and Edge Browser Control DEV-7.0
+        run: |
+          $path='./output/DigiTrans-Browser-Control-Developer.ps1'
+          $token=az account get-access-token --resource-type ms-graph --query accessToken -o tsv
+          $h=@{Authorization="Bearer $token";'Content-Type'='application/json'}
+          $uri="https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts/$env:INTUNE_SCRIPT_ID"
+          $current=Invoke-RestMethod -Method Get -Uri $uri -Headers $h
+          if($current.displayName -ne $env:EXPECTED_DISPLAY_NAME){throw "Unexpected target: $($current.displayName)"}
+          $body=@{
+            displayName=$current.displayName
+            description="GitHub-managed URL policy. Commit: $env:GITHUB_SHA"
+            fileName='DigiTrans-Browser-Control-Developer.ps1'
+            scriptContent=[Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
+            runAsAccount='system'
+            enforceSignatureCheck=$false
+            runAs32Bit=$false
+            roleScopeTagIds=@('0')
+          }|ConvertTo-Json -Depth 5
+          Invoke-RestMethod -Method Patch -Uri $uri -Headers $h -Body $body
