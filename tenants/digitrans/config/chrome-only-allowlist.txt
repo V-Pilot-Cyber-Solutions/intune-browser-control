@@ -1,0 +1,10 @@
+chrome://*
+chrome://print
+chrome-untrusted://print
+ms-excel:*
+postman://*
+blob:*
+data:*
+file:*
+devtools://*
+view-source:*
