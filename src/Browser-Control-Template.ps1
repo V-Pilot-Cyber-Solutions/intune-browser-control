@@ -74,18 +74,52 @@ function ConvertTo-PolicyFlag {
 }
 
 function Test-TemplateRendered {
-    $unresolved = @(
-        $OrganizationName, $TenantKey, $TenantDomain, $PolicyProfile,
-        $PolicyVersion, $HomePage
-    ) | Where-Object { $_ -match '\{\{[^}]+\}\}' }
+    [string[]]$UnresolvedValues = @(
+        @(
+            $OrganizationName
+            $TenantKey
+            $TenantDomain
+            $PolicyProfile
+            $PolicyVersion
+            $HomePage
+        ) |
+            Where-Object {
+                $_ -match '\{\{[^}]+\}\}'
+            }
+    )
 
-    if ($unresolved.Count -gt 0) {
-        throw 'The generated script contains unresolved scalar template tokens.'
+    if ($UnresolvedValues.Count -gt 0) {
+        throw (
+            'The generated script contains unresolved scalar template values: {0}' -f
+            ($UnresolvedValues -join ', ')
+        )
     }
 
-    $rawScript = Get-Content -LiteralPath $PSCommandPath -Raw
-    if ($rawScript -match '\{\{[A-Z0-9_]+\}\}') {
-        throw ('The generated script contains an unresolved token: ' + $Matches[0])
+    $RawScript = Get-Content `
+        -LiteralPath $PSCommandPath `
+        -Raw `
+        -Encoding UTF8
+
+    [System.Text.RegularExpressions.Match[]]$UnresolvedTokenMatches = @(
+        [regex]::Matches(
+            $RawScript,
+            '\{\{[A-Z0-9_]+\}\}'
+        )
+    )
+
+    if ($UnresolvedTokenMatches.Count -gt 0) {
+        [string[]]$UnresolvedTokens = @(
+            $UnresolvedTokenMatches |
+                ForEach-Object {
+                    $_.Value
+                } |
+                Sort-Object -Unique
+        )
+
+        throw (
+            'The generated script contains unresolved tokens: {0}' -f
+            ($UnresolvedTokens -join ', ')
+        )
     }
 }
 
