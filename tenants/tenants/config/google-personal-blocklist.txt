@@ -1,5 +1,0 @@
-.myaccount.google.com
-.workspace.google.com
-.drive.google.com
-.mail.google.com
-.gmail.com
