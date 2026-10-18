@@ -39,6 +39,28 @@ $EdgeOnly = @(
 $PersonalGoogleBlocklist = @(
 {{GOOGLE_PERSONAL_BLOCKLIST}}
 )
+# Default-deny URL controls.
+# The wildcard blocks every URL that isn't explicitly allowed.
+# URLAllowlist entries take precedence over URLBlocklist entries.
+
+$ChromeBlocklist = Get-CleanUniqueList -Items @(
+    '*'
+    $PersonalGoogleBlocklist
+)
+
+$EdgeBlocklist = Get-CleanUniqueList -Items @(
+    '*'
+    $PersonalGoogleBlocklist
+)
+
+if ($ChromeBlocklist -notcontains '*') {
+    throw 'Chrome zero-trust URLBlocklist wildcard is missing.'
+}
+
+if ($EdgeBlocklist -notcontains '*') {
+    throw 'Edge zero-trust URLBlocklist wildcard is missing.'
+}
+
 $TrustedBusinessOrigins = @(
 {{TRUSTED_DOWNLOAD_ORIGINS}}
 )
