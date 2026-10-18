@@ -4,10 +4,11 @@
   "organizationName": "DigiTrans",
   "tenantDomain": "digitrans.partners",
   "policyProfile": "Developer",
-  "policyVersion": "DEV-9",
-  "intuneDisplayName": "GitHub- Chrome and Edge Browser Control DEV-9",
+  "policyVersion": "DEV-9.1",
+  "intuneDisplayName": "DigiTrans - Chrome and Edge Browser Control DEV-9.1",
   "intuneFileName": "DigiTrans-Browser-Control-Developer.ps1",
   "githubEnvironment": "digitrans-production",
+  "homePage": "https://www.google.com/",
   "execution": {
     "runAsAccount": "system",
     "runAs32Bit": false,
