@@ -137,12 +137,11 @@ function Get-CleanUniqueList {
                 }
             } |
             Where-Object {
-                -not [string]::IsNullOrWhiteSpace($_)
+                -not :IsNullOrWhiteSpace($_)
             } |
             Sort-Object -Unique
     )
-
-    return ,$CleanItems
+    return $CleanItems
 }
 
 function Test-UrlPolicyEntry {
@@ -181,7 +180,7 @@ function Set-PolicyList {
 
     if ($Clean.Count -gt 1000) {
         throw (
-            'Policy list exceeds 1,000 entries. Path: {0}; Count: {1}' -f
+            'Policy list exceeds 1,000 entries. Path={0}; Count={1}' -f
             $Path,
             $Clean.Count
         )
@@ -272,13 +271,19 @@ try {
     )
 )
 
-    $baseBlocklist = @()
-    if ($DefaultDenyEnabled -eq 1) {
-        $baseBlocklist += '*'
-    }
-    if ($PersonalGoogleRestrictionsEnabled -eq 1) {
-        $baseBlocklist += $GooglePersonalBlocklist
-    }
+    [string[]]$RawBlocklist = @()
+
+if ($DefaultDenyEnabled -eq 1) {
+    $RawBlocklist += '*'
+}
+
+if ($PersonalGoogleRestrictionsEnabled -eq 1) {
+    $RawBlocklist += @($GooglePersonalBlocklist)
+}
+
+[string[]]$BaseBlocklist = @(
+    Get-CleanUniqueList -Items $RawBlocklist
+)
 
     $chromeCount = Set-PolicyList -Path (Join-Path $ChromeRoot 'URLAllowlist') -Items $chromeAllowlist
     $edgeCount = Set-PolicyList -Path (Join-Path $EdgeRoot 'URLAllowlist') -Items $edgeAllowlist
