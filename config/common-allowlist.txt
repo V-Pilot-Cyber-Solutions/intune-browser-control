@@ -1,0 +1,29 @@
+# One entry per line. Comments and blank lines are ignored.
+# Exact hosts may use the leading-dot syntax already used by DigiTrans.
+
+# Microsoft 365 core
+login.microsoftonline.com
+office.com
+microsoft365.com
+digitranspartnerstech.sharepoint.com
+digitranspartnerstech-my.sharepoint.com
+
+# Google search and Chrome Web Store
+.www.google.com
+.accounts.google.com
+.chromewebstore.google.com
+.chrome.google.com
+.clients2.google.com
+.clients4.google.com
+.gstatic.com
+
+# Postman
+postman.com
+getpostman.com
+identity.postman.co
+identity.getpostman.com
+oauth.pstmn.io
+dl.pstmn.io
+pst-dl.getpostman.com
+
+# Add the remaining currently approved DEV-7.0 entries here before production.
