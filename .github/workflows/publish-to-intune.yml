@@ -7,6 +7,7 @@ on:
         description: DigiTrans browser-policy version
         required: true
         default: DEV-7.1
+        type: string
 
 permissions:
   contents: read
@@ -46,11 +47,12 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-            - name: Verify and update existing Intune script
+      - name: Verify and update existing Intune script
         shell: pwsh
         env:
           INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
           EXPECTED_DISPLAY_NAME: ${{ vars.INTUNE_EXPECTED_DISPLAY_NAME }}
+          POLICY_VERSION: ${{ inputs.version }}
         run: |
           $ErrorActionPreference = 'Stop'
 
@@ -71,29 +73,7 @@ jobs:
               throw 'Microsoft Graph access token was not returned.'
           }
 
-          if (
-              [System.String]::IsNullOrWhiteSpace(
-                  $env:INTUNE_SCRIPT_ID
-              )
-          ) {
-              throw 'INTUNE_SCRIPT_ID is empty.'
-          }
-
-          if (
-              $env:INTUNE_SCRIPT_ID -notmatch
-              '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-          ) {
-              throw (
-                  "INTUNE_SCRIPT_ID must be a GUID, not a display name. " +
-                  "Current value: '$env:INTUNE_SCRIPT_ID'"
-              )
-          }
-
-          if (
-              [System.String]::IsNullOrWhiteSpace(
-                  $env:EXPECTED_DISPLAY_NAME
-              )
-          ) {
+          if ([System.String]::IsNullOrWhiteSpace($env:EXPECTED_DISPLAY_NAME)) {
               throw 'INTUNE_EXPECTED_DISPLAY_NAME is empty.'
           }
 
@@ -103,74 +83,67 @@ jobs:
               'Content-Type' = 'application/json'
           }
 
-          $Uri = (
-              'https://graph.microsoft.com/beta/' +
-              'deviceManagement/deviceManagementScripts/' +
-              $env:INTUNE_SCRIPT_ID
-          )
+          $ScriptId = $env:INTUNE_SCRIPT_ID
+          $GuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
+          if ([System.String]::IsNullOrWhiteSpace($ScriptId) -or $ScriptId -notmatch $GuidPattern) {
+              Write-Host 'INTUNE_SCRIPT_ID is absent or not a GUID. Resolving the script by exact display name.'
+
+              $ListUri = 'https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts?$select=id,displayName,fileName,lastModifiedDateTime&$top=100'
+              $ListResponse = Invoke-RestMethod `
+                -Method Get `
+                -Uri $ListUri `
+                -Headers $Headers
+
+              $Matches = @(
+                  $ListResponse.value | Where-Object {
+                      $_.displayName -eq $env:EXPECTED_DISPLAY_NAME
+                  }
+              )
+
+              if ($Matches.Count -eq 0) {
+                  throw "No Intune Platform Script was found with display name '$env:EXPECTED_DISPLAY_NAME'."
+              }
+
+              if ($Matches.Count -gt 1) {
+                  throw "More than one Intune Platform Script has display name '$env:EXPECTED_DISPLAY_NAME'. Configure INTUNE_SCRIPT_ID with the correct GUID."
+              }
+
+              $ScriptId = $Matches[0].id
+              Write-Host "Resolved Intune script ID: $ScriptId"
+          }
+
+          if ($ScriptId -notmatch $GuidPattern) {
+              throw "Resolved Intune script ID is not a valid GUID: '$ScriptId'"
+          }
+
+          $Uri = 'https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts/' + $ScriptId
 
           Write-Host 'Retrieving and verifying the existing Intune script.'
-
           $Current = Invoke-RestMethod `
-              -Method Get `
-              -Uri $Uri `
-              -Headers $Headers
+            -Method Get `
+            -Uri $Uri `
+            -Headers $Headers
 
-          if ($Current.id -ne $env:INTUNE_SCRIPT_ID) {
-              throw (
-                  "Returned Intune script ID does not match the " +
-                  "configured script ID."
-              )
+          if ($Current.id -ne $ScriptId) {
+              throw 'Returned Intune script ID does not match the resolved script ID.'
           }
 
-          if (
-              $Current.displayName -ne
-              $env:EXPECTED_DISPLAY_NAME
-          ) {
-              throw (
-                  "Target mismatch. Expected '{0}', received '{1}'." -f
-                  $env:EXPECTED_DISPLAY_NAME,
-                  $Current.displayName
-              )
+          if ($Current.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
+              throw "Target mismatch. Expected '$env:EXPECTED_DISPLAY_NAME', received '$($Current.displayName)'."
           }
 
-          if (-not $Current.lastModifiedDateTime) {
-              throw 'The target Intune script could not be verified.'
-          }
+          $ScriptBytes = [System.IO.File]::ReadAllBytes($ScriptPath)
+          $ScriptContent = [System.Convert]::ToBase64String($ScriptBytes)
 
-          Write-Host (
-              "Verified Intune script: {0}" -f
-              $Current.displayName
-          )
-
-          $ScriptBytes = [System.IO.File]::ReadAllBytes(
-              $ScriptPath
-          )
-
-          $ScriptContent = [System.Convert]::ToBase64String(
-              $ScriptBytes
-          )
-
-          if (
-              [System.String]::IsNullOrWhiteSpace(
-                  $ScriptContent
-              )
-          ) {
+          if ([System.String]::IsNullOrWhiteSpace($ScriptContent)) {
               throw 'Generated Base64 script content is empty.'
           }
 
           $BodyObject = @{
               displayName = $Current.displayName
-
-              description = (
-                  "V Pilot GitHub-managed DigiTrans browser policy. " +
-                  "Version: DEV-7.1. " +
-                  "Commit: $env:GITHUB_SHA"
-              )
-
-              fileName =
-                  'DigiTrans-Browser-Control-Developer.ps1'
-
+              description = "V Pilot GitHub-managed DigiTrans browser policy. Version: $env:POLICY_VERSION. Commit: $env:GITHUB_SHA"
+              fileName = 'DigiTrans-Browser-Control-Developer.ps1'
               scriptContent = $ScriptContent
               runAsAccount = 'system'
               enforceSignatureCheck = $false
@@ -178,48 +151,33 @@ jobs:
               roleScopeTagIds = @('0')
           }
 
-          $Body = $BodyObject |
-              ConvertTo-Json -Depth 10
+          $Body = $BodyObject | ConvertTo-Json -Depth 10
 
           Write-Host 'Publishing the updated script to Intune.'
-
           $UpdatedScript = Invoke-RestMethod `
-              -Method Patch `
-              -Uri $Uri `
-              -Headers $Headers `
-              -Body $Body
+            -Method Patch `
+            -Uri $Uri `
+            -Headers $Headers `
+            -Body $Body
 
-          if (
-              $UpdatedScript.displayName -ne
-              $env:EXPECTED_DISPLAY_NAME
-          ) {
+          if ($UpdatedScript.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
               throw 'Microsoft Graph did not return the expected script.'
           }
 
-          Write-Host (
-              "Successfully updated Intune script: {0}" -f
-              $UpdatedScript.displayName
-          )
+          Write-Host "Successfully updated Intune script: $($UpdatedScript.displayName)"
+          Write-Host "Intune script ID: $($UpdatedScript.id)"
+          Write-Host "Last modified: $($UpdatedScript.lastModifiedDateTime)"
 
-          Write-Host (
-              "Last modified: {0}" -f
-              $UpdatedScript.lastModifiedDateTime
-          )
+          "INTUNE_RESOLVED_SCRIPT_ID=$ScriptId" | Out-File `
+            -FilePath $env:GITHUB_ENV `
+            -Encoding utf8 `
+            -Append
 
       - name: Deployment summary
         shell: pwsh
         run: |
-          "## DigiTrans Intune browser-policy deployment" |
-              Add-Content $env:GITHUB_STEP_SUMMARY
-
-          "- Tenant: DigiTrans" |
-              Add-Content $env:GITHUB_STEP_SUMMARY
-
-          "- Version: ${{ inputs.version }}" |
-              Add-Content $env:GITHUB_STEP_SUMMARY
-
-          "- Commit: $env:GITHUB_SHA" |
-              Add-Content $env:GITHUB_STEP_SUMMARY
-
-          "- Target script ID: ${{ vars.INTUNE_SCRIPT_ID }}" |
-              Add-Content $env:GITHUB_STEP_SUMMARY
+          "## DigiTrans Intune browser-policy deployment" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Tenant: DigiTrans" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Version: ${{ inputs.version }}" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Commit: $env:GITHUB_SHA" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "- Target script ID: $env:INTUNE_RESOLVED_SCRIPT_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
