@@ -1,20 +1,136 @@
-name: Show GitHub organization and repository IDs
+name: Publish DigiTrans browser control to Intune
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: DigiTrans browser-policy version
+        required: true
+        default: DEV-7.1
 
 permissions:
   contents: read
+  id-token: write
+
+concurrency:
+  group: digitrans-intune-browser-control
+  cancel-in-progress: false
 
 jobs:
-  show-identifiers:
-    runs-on: ubuntu-latest
+  build-validate-publish:
+    runs-on: windows-latest
+    environment: digitrans-production
 
     steps:
-      - name: Display immutable GitHub IDs
-        shell: bash
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build DigiTrans policy
+        shell: pwsh
         run: |
-          echo "Organization Name: $GITHUB_REPOSITORY_OWNER"
-          echo "Organization ID: $GITHUB_REPOSITORY_OWNER_ID"
-          echo "Repository Name: $GITHUB_REPOSITORY"
-          echo "Repository ID: $GITHUB_REPOSITORY_ID"
+          ./tools/Build-BrowserControl.ps1 `
+            -TenantKey 'digitrans' `
+            -Version '${{ inputs.version }}' `
+            -OutputPath './output/digitrans/DigiTrans-Browser-Control-Developer.ps1'
+
+      - name: Validate DigiTrans policy
+        shell: pwsh
+        run: |
+          ./tools/Validate-BrowserControl.ps1 `
+            -ScriptPath './output/digitrans/DigiTrans-Browser-Control-Developer.ps1'
+
+      - name: Authenticate to DigiTrans using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Verify and update existing Intune script
+        shell: pwsh
+        env:
+          INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
+          EXPECTED_DISPLAY_NAME: ${{ vars.INTUNE_EXPECTED_DISPLAY_NAME }}
+        run: |
+          $ScriptPath = `
+            './output/digitrans/DigiTrans-Browser-Control-Developer.ps1'
+
+          $Token = az account get-access-token `
+            --resource-type ms-graph `
+            --query accessToken `
+            --output tsv
+
+          if (:IsNullOrWhiteSpace($Token)) {
+              throw 'Microsoft Graph token was not returned.'
+          }
+
+          $Headers = @{
+              Authorization = "Bearer $Token"
+              Accept = 'application/json'
+              'Content-Type' = 'application/json'
+          }
+
+          $Uri = `
+            "https://graph.microsoft.com/beta/" +
+            "deviceManagement/deviceManagementScripts/" +
+            $env:INTUNE_SCRIPT_ID
+
+          $Current = Invoke-RestMethod `
+            -Method Get `
+            -Uri $Uri `
+            -Headers $Headers
+
+          if ($Current.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
+              throw (
+                  "Target mismatch. Expected '{0}', received '{1}'." -f
+                  $env:EXPECTED_DISPLAY_NAME,
+                  $Current.displayName
+              )
+          }
+
+          if (-not $Current.lastModifiedDateTime) {
+              throw 'The target Intune script could not be verified.'
+          }
+
+          $ScriptContent = :ToBase64String(
+              [IO.File]::ReadAllBytes($ScriptPath)
+          )
+
+          $Body = @{
+              displayName = $Current.displayName
+              description = (
+                  "V Pilot GitHub-managed DigiTrans browser policy. " +
+                  "Version: ${{ inputs.version }}. " +
+                  "Commit: $env:GITHUB_SHA"
+              )
+              fileName = 'DigiTrans-Browser-Control-Developer.ps1'
+              scriptContent = $ScriptContent
+              runAsAccount = 'system'
+              enforceSignatureCheck = $false
+              runAs32Bit = $false
+              roleScopeTagIds = @('0')
+          } | ConvertTo-Json -Depth 10
+
+          Invoke-RestMethod `
+              -Method Patch `
+              -Uri $Uri `
+              -Headers $Headers `
+              -Body $Body
+
+      - name: Deployment summary
+        shell: pwsh
+        run: |
+          "## DigiTrans Intune browser-policy deployment" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Tenant: DigiTrans" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Version: ${{ inputs.version }}" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Commit: $env:GITHUB_SHA" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Target script ID: ${{ vars.INTUNE_SCRIPT_ID }}" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
