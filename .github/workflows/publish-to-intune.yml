@@ -46,22 +46,55 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Verify and update existing Intune script
+            - name: Verify and update existing Intune script
         shell: pwsh
         env:
           INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
           EXPECTED_DISPLAY_NAME: ${{ vars.INTUNE_EXPECTED_DISPLAY_NAME }}
         run: |
-          $ScriptPath = `
-            './output/digitrans/DigiTrans-Browser-Control-Developer.ps1'
+          $ErrorActionPreference = 'Stop'
+
+          $ScriptPath = Join-Path `
+            -Path $env:GITHUB_WORKSPACE `
+            -ChildPath 'output\digitrans\DigiTrans-Browser-Control-Developer.ps1'
+
+          if (-not (Test-Path -LiteralPath $ScriptPath)) {
+              throw "Generated script was not found: $ScriptPath"
+          }
 
           $Token = az account get-access-token `
             --resource-type ms-graph `
             --query accessToken `
             --output tsv
 
-          if (:IsNullOrWhiteSpace($Token)) {
-              throw 'Microsoft Graph token was not returned.'
+          if ([System.String]::IsNullOrWhiteSpace($Token)) {
+              throw 'Microsoft Graph access token was not returned.'
+          }
+
+          if (
+              [System.String]::IsNullOrWhiteSpace(
+                  $env:INTUNE_SCRIPT_ID
+              )
+          ) {
+              throw 'INTUNE_SCRIPT_ID is empty.'
+          }
+
+          if (
+              $env:INTUNE_SCRIPT_ID -notmatch
+              '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          ) {
+              throw (
+                  "INTUNE_SCRIPT_ID must be a GUID, not a display name. " +
+                  "Current value: '$env:INTUNE_SCRIPT_ID'"
+              )
+          }
+
+          if (
+              [System.String]::IsNullOrWhiteSpace(
+                  $env:EXPECTED_DISPLAY_NAME
+              )
+          ) {
+              throw 'INTUNE_EXPECTED_DISPLAY_NAME is empty.'
           }
 
           $Headers = @{
@@ -70,17 +103,30 @@ jobs:
               'Content-Type' = 'application/json'
           }
 
-          $Uri = `
-            "https://graph.microsoft.com/beta/" +
-            "deviceManagement/deviceManagementScripts/" +
-            $env:INTUNE_SCRIPT_ID
+          $Uri = (
+              'https://graph.microsoft.com/beta/' +
+              'deviceManagement/deviceManagementScripts/' +
+              $env:INTUNE_SCRIPT_ID
+          )
+
+          Write-Host 'Retrieving and verifying the existing Intune script.'
 
           $Current = Invoke-RestMethod `
-            -Method Get `
-            -Uri $Uri `
-            -Headers $Headers
+              -Method Get `
+              -Uri $Uri `
+              -Headers $Headers
 
-          if ($Current.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
+          if ($Current.id -ne $env:INTUNE_SCRIPT_ID) {
+              throw (
+                  "Returned Intune script ID does not match the " +
+                  "configured script ID."
+              )
+          }
+
+          if (
+              $Current.displayName -ne
+              $env:EXPECTED_DISPLAY_NAME
+          ) {
               throw (
                   "Target mismatch. Expected '{0}', received '{1}'." -f
                   $env:EXPECTED_DISPLAY_NAME,
@@ -92,30 +138,73 @@ jobs:
               throw 'The target Intune script could not be verified.'
           }
 
-          $ScriptContent = :ToBase64String(
-              [IO.File]::ReadAllBytes($ScriptPath)
+          Write-Host (
+              "Verified Intune script: {0}" -f
+              $Current.displayName
           )
 
-          $Body = @{
+          $ScriptBytes = [System.IO.File]::ReadAllBytes(
+              $ScriptPath
+          )
+
+          $ScriptContent = [System.Convert]::ToBase64String(
+              $ScriptBytes
+          )
+
+          if (
+              [System.String]::IsNullOrWhiteSpace(
+                  $ScriptContent
+              )
+          ) {
+              throw 'Generated Base64 script content is empty.'
+          }
+
+          $BodyObject = @{
               displayName = $Current.displayName
+
               description = (
                   "V Pilot GitHub-managed DigiTrans browser policy. " +
-                  "Version: ${{ inputs.version }}. " +
+                  "Version: DEV-7.1. " +
                   "Commit: $env:GITHUB_SHA"
               )
-              fileName = 'DigiTrans-Browser-Control-Developer.ps1'
+
+              fileName =
+                  'DigiTrans-Browser-Control-Developer.ps1'
+
               scriptContent = $ScriptContent
               runAsAccount = 'system'
               enforceSignatureCheck = $false
               runAs32Bit = $false
               roleScopeTagIds = @('0')
-          } | ConvertTo-Json -Depth 10
+          }
 
-          Invoke-RestMethod `
+          $Body = $BodyObject |
+              ConvertTo-Json -Depth 10
+
+          Write-Host 'Publishing the updated script to Intune.'
+
+          $UpdatedScript = Invoke-RestMethod `
               -Method Patch `
               -Uri $Uri `
               -Headers $Headers `
               -Body $Body
+
+          if (
+              $UpdatedScript.displayName -ne
+              $env:EXPECTED_DISPLAY_NAME
+          ) {
+              throw 'Microsoft Graph did not return the expected script.'
+          }
+
+          Write-Host (
+              "Successfully updated Intune script: {0}" -f
+              $UpdatedScript.displayName
+          )
+
+          Write-Host (
+              "Last modified: {0}" -f
+              $UpdatedScript.lastModifiedDateTime
+          )
 
       - name: Deployment summary
         shell: pwsh
