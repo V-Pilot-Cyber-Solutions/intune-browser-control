@@ -124,15 +124,25 @@ function Test-TemplateRendered {
 }
 
 function Get-CleanUniqueList {
-    param([AllowEmptyCollection()][string[]]$Items)
-    return @(
+    param(
+        [AllowEmptyCollection()]
+        [string[]]$Items
+    )
+
+    [string[]]$CleanItems = @(
         $Items |
             ForEach-Object {
-                if ($null -ne $_) { $_.Trim() }
+                if ($null -ne $_) {
+                    $_.Trim()
+                }
             } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_)
+            } |
             Sort-Object -Unique
     )
+
+    return ,$CleanItems
 }
 
 function Test-UrlPolicyEntry {
@@ -154,29 +164,56 @@ function Test-UrlPolicyEntry {
 
 function Set-PolicyList {
     param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [AllowEmptyCollection()][string[]]$Items
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [AllowEmptyCollection()]
+        [string[]]$Items
     )
 
-    $clean = Get-CleanUniqueList -Items $Items
-    foreach ($item in $clean) {
-        Test-UrlPolicyEntry -Entry $item
+    [string[]]$Clean = @(
+        Get-CleanUniqueList -Items $Items
+    )
+
+    foreach ($Item in $Clean) {
+        Test-UrlPolicyEntry -Entry $Item
     }
-    if ($clean.Count -gt 1000) {
-        throw ('Policy exceeds 1,000 entries: ' + $clean.Count)
+
+    if ($Clean.Count -gt 1000) {
+        throw (
+            'Policy list exceeds 1,000 entries. Path: {0}; Count: {1}' -f
+            $Path,
+            $Clean.Count
+        )
     }
 
     if (Test-Path -LiteralPath $Path) {
-        Remove-Item -LiteralPath $Path -Recurse -Force
+        Remove-Item `
+            -LiteralPath $Path `
+            -Recurse `
+            -Force
     }
-    New-Item -Path $Path -Force | Out-Null
 
-    $index = 1
-    foreach ($item in $clean) {
-        New-ItemProperty -Path $Path -Name ([string]$index) -Value $item -PropertyType String -Force | Out-Null
-        $index++
+    New-Item `
+        -Path $Path `
+        -Force |
+            Out-Null
+
+    $Index = 1
+
+    foreach ($Item in $Clean) {
+        New-ItemProperty `
+            -Path $Path `
+            -Name ([string]$Index) `
+            -Value $Item `
+            -PropertyType String `
+            -Force |
+                Out-Null
+
+        $Index++
     }
-    return $clean.Count
+
+    return [int]$Clean.Count
 }
 
 function Set-DWordPolicy {
@@ -219,12 +256,21 @@ try {
     }
 
     Set-DWordPolicy -Path $ChromeRoot -Name 'CloudAPAuthEnabled' -Value $ChromeCloudAPAuthEnabled
-    Set-DWordPolicy -Path $ChromeRoot -Name 'BrowserSignin' -Value $(if ($ChromeBrowserSigninDisabled) { 0 } else { 1 })
+    Set-DWordPolicy -Path $ChromeRoot -Name 'BrowserSignin' -Value $(if ($ChromeBrowserSigninDisabled -eq 1) { 0 } else { 1 })
     Set-DWordPolicy -Path $ChromeRoot -Name 'IncognitoModeAvailability' -Value $(if ($ChromeIncognitoDisabled) { 1 } else { 0 })
     Set-DWordPolicy -Path $EdgeRoot -Name 'InPrivateModeAvailability' -Value $(if ($EdgeInPrivateDisabled) { 1 } else { 0 })
 
-    $chromeAllowlist = Get-CleanUniqueList -Items @($CommonAllowlist + $ChromeOnlyAllowlist)
-    $edgeAllowlist = Get-CleanUniqueList -Items @($CommonAllowlist + $EdgeOnlyAllowlist)
+    [string[]]$ChromeAllowlist = @(
+    Get-CleanUniqueList -Items @(
+        $CommonAllowlist + $ChromeOnlyAllowlist
+    )
+)
+
+[string[]]$EdgeAllowlist = @(
+    Get-CleanUniqueList -Items @(
+        $CommonAllowlist + $EdgeOnlyAllowlist
+    )
+)
 
     $baseBlocklist = @()
     if ($DefaultDenyEnabled -eq 1) {
@@ -232,7 +278,6 @@ try {
     }
     if ($PersonalGoogleRestrictionsEnabled -eq 1) {
         $baseBlocklist += $GooglePersonalBlocklist
-        Set-DWordPolicy -Path $ChromeRoot -Name 'SecondaryGoogleAccountSigninAllowed' -Value 0
     }
 
     $chromeCount = Set-PolicyList -Path (Join-Path $ChromeRoot 'URLAllowlist') -Items $chromeAllowlist
@@ -263,8 +308,25 @@ try {
     exit 0
 }
 catch {
-    Write-Log ('ERROR: ' + $_.Exception.Message)
-    Write-Log ('ERROR LINE: ' + $_.InvocationInfo.ScriptLineNumber)
-    Write-Error $_.Exception.Message
+    $ErrorLine = $_.InvocationInfo.ScriptLineNumber
+    $ErrorType = $_.Exception.GetType().FullName
+    $ErrorMessage = $_.Exception.Message
+    $ErrorPosition = $_.InvocationInfo.PositionMessage
+
+    Write-Log ('ERROR MESSAGE: ' + $ErrorMessage)
+    Write-Log ('ERROR TYPE: ' + $ErrorType)
+    Write-Log ('ERROR LINE: ' + $ErrorLine)
+
+    if (-not [string]::IsNullOrWhiteSpace($ErrorPosition)) {
+        Write-Log ('ERROR POSITION: ' + $ErrorPosition)
+    }
+
+    Write-Error (
+        'Browser-control deployment failed. Line={0}; Type={1}; Message={2}' -f
+        $ErrorLine,
+        $ErrorType,
+        $ErrorMessage
+    )
+
     exit 1
 }
