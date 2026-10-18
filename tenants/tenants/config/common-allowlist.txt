@@ -1,0 +1,462 @@
+# DigiTrans Browser Control - Common URL Allowlist
+# Source: DigiTrans-Browser-Control-Developer-DEV-7.0.txt
+# Generated: 2026-10-18
+#
+# Governance instructions:
+# - Keep one policy entry per line.
+# - Do not add quotes, commas, PowerShell syntax, or HTML hyperlinks.
+# - Add new entries under the most relevant category.
+# - Preserve exact-host entries beginning with a dot.
+# - Record approvals and change references in CHANGELOG.md.
+# - Do not add broad google.com or [*.]google.com entries.
+# - Rebuild and validate the consolidated PS1 before publishing to Intune.
+
+# ============================================================================
+# Microsoft 365, Identity and Collaboration (50)
+# ============================================================================
+1drv.ms
+account.microsoft.com
+admin.cloud.microsoft
+admin.exchange.microsoft.com
+admin.microsoft.com
+certauth.enterpriseregistration.windows.net
+cloud.microsoft
+compliance.microsoft.com
+config.office.com
+device.login.microsoftonline.com
+dm.microsoft.com
+ecs.office.com
+endpoint.microsoft.com
+enrollment.manage.microsoft.com
+enterpriseenrollment.manage.microsoft.com
+enterpriseenrollment.microsoft.com
+enterpriseregistration.windows.net
+graph.microsoft.com
+graph.windows.net
+intune.microsoft.com
+login.live.com
+login.microsoft.com
+login.microsoftonline.com
+m365.cloud.microsoft
+manage.microsoft.com
+microsoft365.com
+microsoftonline-p.com
+microsoftonline.com
+msauth.net
+msftauth.net
+msftidentity.com
+myaccess.microsoft.com
+office.com
+office.net
+office365.com
+onedrive.com
+onedrive.live.com
+outlook.com
+outlook.office.com
+outlook.office365.com
+portal.manage.microsoft.com
+portal.office.com
+protection.outlook.com
+purview.microsoft.com
+security.microsoft
+security.microsoft.com
+securitycenter.microsoft.com
+service.protection.outlook.com
+sharepoint.com
+sharepointonline.com
+
+# ============================================================================
+# Azure, Intune, Security and Management (37)
+# ============================================================================
+account.azure.com
+api.azrbac.mspim.azure.com
+api.loganalytics.io
+applicationinsights.azure.com
+appservice.azure.com
+azure.status.microsoft
+bmx.azure.com
+catalogapi.azure.com
+database.windows.net
+dev.azure.com
+ext.azure.com
+functions.azure.com
+gallery.azure.com
+hosting-ms.portal.azure.net
+hosting.partners.azure.net
+hosting.portal.azure.net
+iam.ad.ext.azure.com
+identitygovernance.azure.com
+iga.azure.com
+informationprotection.azure.com
+loganalytics.io
+logic.azure.com
+management.azure.com
+monitor.azure.com
+mspim.azure.com
+network.azure.com
+portal.azure.com
+purview.azure.com
+reactblade.portal.azure.net
+search.azure.com
+servicebus.azure.net
+shell.azure.com
+signup.azure.com
+storage.azure.com
+storage.azure.net
+vault.azure.net
+web.purview.azure.com
+
+# ============================================================================
+# Windows Update, Office CDN and Microsoft Infrastructure (28)
+# ============================================================================
+appmanagement.activedirectory.microsoft.com
+bing.com
+catalog.update.microsoft.com
+crl.microsoft.com
+ctldl.windowsupdate.com
+delivery.mp.microsoft.com
+dl.delivery.mp.microsoft.com
+download.microsoft.com
+download.windowsupdate.com
+entra.microsoft.com
+g.live.com
+go.microsoft.com
+learn.microsoft.com
+microsoft.com
+mscrl.microsoft.com
+msn.com
+msn.net
+notify.windows.com
+officecdn.microsoft.com
+officecdn.microsoft.com.edgesuite.net
+officeconfig.msocdn.com
+onecdn.static.microsoft
+p.sfx.ms
+res.cdn.office.net
+s-microsoft.com
+update.microsoft.com
+windowsupdate.com
+wns.windows.com
+
+# ============================================================================
+# Google Search, Authentication and Chrome Services (11)
+# ============================================================================
+.accounts.google.com
+.chrome.google.com
+.chromewebstore.google.com
+.clients2.google.com
+.clients4.google.com
+.colab.research.google.com
+.gstatic.com
+.www.google.com
+googleapis.com
+googletagmanager.com
+stitch.withgoogle.com
+
+# ============================================================================
+# DigiTrans and Approved Internal Business Services (8)
+# ============================================================================
+demo.vakuai.com
+dev.vakuai.com
+digitrans.partners
+digitranspartnerstech-my.sharepoint.com
+digitranspartnerstech.sharepoint.com
+traefik.dhanada.ai
+vakuai.com
+vakuaihr.com
+
+# ============================================================================
+# Oracle, OCI and ERP Services (32)
+# ============================================================================
+684d0d4c.akstat.io
+aaaadgqr7ado6aaaaaaaaac6y4.apm-agt.me-dubai-1.oci.oraclecloud.com
+community.oracle.com
+eqausaa7fvgh4jqacqlqa3iaabvkz6vt-p8vc2k-6e3fa445e-clienttons-s.akamaihd.net
+ewnp-dev2.fa.ocs.oraclecloud.com
+frald-dev.aldar.com
+guidedlearning-emea.oracle.com
+iabqbk-dev1.fa.ocs.oraclecloud.com
+iabqbk-test.fa.ocs.oraclecloud.com
+idcs-85fbf04fd21b4cfdb83aff8ff35ee6b9.identity.oraclecloud.com
+identity.oraclecloud.com
+oci-devdb.aldar.com
+oci-sitdb.aldar.com
+oci-uatdb.aldar.com
+oci.oraclecloud.com
+ocp.oraclecloud.com
+oic-vbcs-sitoic-vb-frwn5kltrtdv.builder.me-dubai-1.ocp.oraclecloud.com
+oracle.com
+oracle.zoom.us
+oraclebytes.com
+oraclecloud.com
+oraclecloudapps.com
+oracleebsgeeks.blogspot.com
+oracleexpertinsights.blogspot.com
+oracleocidemo.com
+oracletechcenter.blogspot.com
+profile.oracle.com
+signon.oracle.com
+static.oracle.com
+tms.oracle.com
+trial-eum-clienttons-s.akamaihd.net
+us.v-cdn.net
+
+# ============================================================================
+# Developer, Source Control, API and Container Tools (32)
+# ============================================================================
+aad.azure.com
+api.github.com
+avatars.githubusercontent.com
+camo.githubusercontent.com
+cdn.jsdelivr.net
+dl.pstmn.io
+docker.com
+docs.docker.com
+getpostman.com
+github.com
+githubassets.com
+identity.getpostman.com
+jetbrains.com
+jsbin.com
+jsonbeautify.org
+jsonformatter.org
+jsonlint.com
+main.prod.marketplacedataprovider.azure.com
+marketplace.visualstudio.com
+marketplacedataprovider.azure.com
+notepad-plus-plus.org
+objects.githubusercontent.com
+onecompiler.com
+postman.com
+pst-dl.getpostman.com
+raw.githubusercontent.com
+release-assets.githubusercontent.com
+ux.console.azure.com
+visualstudio.com
+vsassets.io
+vssps.visualstudio.com
+vstmrblob.vsassets.io
+
+# ============================================================================
+# AI and Approved Assistant Services (20)
+# ============================================================================
+anthropic.com
+api.anthropic.com
+api.openai.com
+auth.openai.com
+auth0.openai.com
+cdn.openaimerge.com
+chat.chatbotapp.ai
+chatgpt.com
+claude.ai
+claude.com
+oaistatic.com
+oaistatsig.com
+oaiusercontent.com
+openai.com
+perplexity.ai
+platform.claude.com
+platform.openai.com
+setup.auth.openai.com
+sqlai.app
+ws.chatgpt.com
+
+# ============================================================================
+# Freshworks, Helpdesk and Customer Support (16)
+# ============================================================================
+accounts-us.freshworks.com
+apicdn-wchat.freshchat.com
+assets18.freshservice.com
+freshchat.com
+freshservice-us.freshreports.com
+freshservice.com
+freshworks.com
+freshworksapi.com
+mawaridholding-fsfc-1713953248-9c23756d141d6fc17140149.freshchat.com
+mawaridholding-org.freshservice.com
+mawaridholding-org.myfreshworks.com
+mawaridholding.attachments.freshservice.com
+mawaridholding.freshservice.com
+mawaridholding.myfreshworks.com
+myfreshworks.com
+webpush.freshchat.com
+
+# ============================================================================
+# Security, Password Management, VPN and Trust Services (19)
+# ============================================================================
+cdn.cookielaw.org
+challenges.cloudflare.com
+connect.keepersecurity.com
+consent.truste.com
+files.services.keepersecurity.com
+halainfosec.com
+hcaptcha.com
+k7computing.com
+keeper.io
+keepersecurity.com
+krelay.keepersecurity.com
+methanex.okta.com
+okta.com
+oktacdn.com
+oktausercontent.com
+push.services.keepersecurity.com
+smartscreen.microsoft.com
+updates.k7computing.com
+wdcp.microsoft.com
+
+# ============================================================================
+# Communication, Meetings and Professional Networks (13)
+# ============================================================================
+admin.teams.microsoft.com
+app.slack.com
+cqd.teams.microsoft.com
+linkedin.com
+rtschannel.com
+slack.com
+statics.teams.cdn.office.net
+teams.cdn.office.net
+teams.live.com
+teams.microsoft.com
+teams.public.onecdn.static.microsoft
+zoom.com
+zoom.us
+
+# ============================================================================
+# Banking, Government and Regional Portals (13)
+# ============================================================================
+anbcapital.com.sa
+ebixcash.com
+ecouncil.ae
+eportal.incometax.gov.in
+hdfc.bank.in
+idfcfirst.bank.in
+incometax.gov.in
+mada.com.kw
+mashreq.cloud.com
+my.mashreq.com
+u.ae
+www.incometax.gov.in
+zatca.gov.sa
+
+# ============================================================================
+# Customer, Vendor and Partner Business Portals (34)
+# ============================================================================
+accounts.zoho.com
+ae.fieldglass.cloud.sap
+analytics.zoho.com
+app.elitbuzz.com
+beaconarabia.com
+booking.com
+datafusing.com
+digitalforms.mawaridhi.com
+ejada.com
+elitbuzz.com
+erpdev.zain.com
+erpprod.zain.com
+erpsit.en-ksa.com
+erptest.zain.com
+fieldglass.ae
+flapkap.com
+godaddy.com
+helpdesk.mawaridhi.com
+hre01p.hireright.com
+keka.com
+maildrop.cc
+mawaridhi.com
+mawaridpowerbi.crm4.dynamics.com
+nintexo365.net
+prodapps.mawaridhi.com
+protivitiglobal.me
+sa.elitbuzz.com
+servicedesk.methanex.com
+skyscanner.com
+wus-srv-ufo.nintexo365.net
+www.datafusing.com
+www.elitbuzz.com
+zaingroup-my.sharepoint.com
+zoho.com
+
+# ============================================================================
+# Content Delivery, Telemetry and Web Dependencies (35)
+# ============================================================================
+aadcdn.microsoftonline-p.com
+aadcdn.msauth.net
+aadcdn.msauthimages.net
+aadcdn.msftauth.net
+aadcdn.msftauthimages.net
+app.getbeamer.com
+aria.microsoft.com
+assets.adobedtm.com
+awstrack.me
+azureedge.net
+azurefd.net
+backend.getbeamer.com
+browser.pipe.aria.microsoft.com
+c.go-mpulse.net
+catalogartifact.azureedge.net
+cdn.workos.com
+ct.sendgrid.net
+events.data.microsoft.com
+forwarder.workos.com
+images.workoscdn.com
+intercom.io
+intercomcdn.com
+js.stripe.com
+logincdn.msftauth.net
+realtime.getbeamer.com
+rum.haystack.es
+s.go-mpulse.net
+s3.amazonaws.com
+setup.workos.com
+static.microsoft
+subscriptionrp.trafficmanager.net
+tags.tiqcdn.com
+trafficmanager.net
+usercontent.microsoft
+workos.imgix.net
+
+# ============================================================================
+# Approved Web Utilities and Productivity (7)
+# ============================================================================
+apps2fusion.com
+base64decode.org
+base64encode.org
+diffchecker.com
+fusionhcmconsulting.com
+openpdf.com
+quillbot.com
+
+# ============================================================================
+# Local Development and Custom Protocol Endpoints (9)
+# ============================================================================
+http://127.0.0.1
+http://139.185.56.153:8080/ords
+http://localhost
+https://127.0.0.1
+https://localhost
+ws://127.0.0.1
+ws://localhost
+wss://127.0.0.1
+wss://localhost
+
+# ============================================================================
+# Other Approved Business Domains (18)
+# ============================================================================
+aka.ms
+apac.network-auth.com
+api.aadrm.com
+auth.gfx.ms
+config.edge.skype.com
+files.1drv.com
+freshdev.io
+identity.postman.co
+login.windows.net
+msftconnecttest.com
+officeapps.live.com
+oneclient.sfx.ms
+querytuner.com
+servicebus.windows.net
+stamptls2.directdlm.com
+storage.live.com
+windows.net
+youtube.com
