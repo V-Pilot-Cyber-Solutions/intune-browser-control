@@ -7,11 +7,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepositoryRoot = Split-Path -Path $PSScriptRoot -Parent
-
 if (-not [System.IO.Path]::IsPathRooted($ScriptPath)) {
     $ScriptPath = Join-Path -Path $RepositoryRoot -ChildPath $ScriptPath
 }
-
 if (-not (Test-Path -LiteralPath $ScriptPath)) {
     throw "Generated policy script not found: $ScriptPath"
 }
@@ -42,127 +40,82 @@ function Assert-ResolvedIntegerVariable {
     return $Value
 }
 
-# Block actual HTML markup accidentally copied into policy data or source.
-if (
-    $Content -match '(?i)<a\s+[^>]*href\s*=' -or
-    $Content -match '(?i)&lt;a\s+[^&]*href'
-) {
+if ($Content -match '(?i)<a\s+[^>]*href\s*=' -or $Content -match '(?i)&lt;a\s+[^&]*href') {
     throw 'Actual or encoded HTML anchor markup was found.'
 }
 
-if ($Content -match '\{\{[A-Z0-9_]+\}\}') {
-    $RemainingPlaceholders = @(
-        [regex]::Matches($Content, '\{\{[A-Z0-9_]+\}\}') |
-            ForEach-Object { $_.Value } |
-            Sort-Object -Unique
+[System.Text.RegularExpressions.Match[]]$RemainingPlaceholderMatches = @(
+    [regex]::Matches($Content, '\{\{[A-Z0-9_]+\}\}')
+)
+if ($RemainingPlaceholderMatches.Count -gt 0) {
+    [string[]]$RemainingPlaceholders = @(
+        $RemainingPlaceholderMatches | ForEach-Object { $_.Value } | Sort-Object -Unique
     )
-    throw "An unresolved template placeholder was detected: $($RemainingPlaceholders -join ', ')"
+    throw "Unresolved template placeholders: $($RemainingPlaceholders -join ', ')"
 }
 
-# Validate the rendered tenant-control values. The generated template applies
-# these variables through Set-DWordPolicy, so validation must inspect the
-# assignments rather than expect a literal '-Value 1' beside each policy name.
-$CloudAPValue = Assert-ResolvedIntegerVariable `
-    -VariableName 'ChromeCloudAPAuthEnabled' `
-    -AllowedValues @(1) `
-    -ErrorMessage 'CloudAP authentication is missing or disabled.'
+$CloudAPValue = Assert-ResolvedIntegerVariable -VariableName 'ChromeCloudAPAuthEnabled' -AllowedValues @(1) -ErrorMessage 'CloudAP authentication is missing or disabled.'
+$ChromeIncognitoDisabled = Assert-ResolvedIntegerVariable -VariableName 'ChromeIncognitoDisabled' -AllowedValues @(1) -ErrorMessage 'Chrome Incognito is enabled or missing.'
+$EdgeInPrivateDisabled = Assert-ResolvedIntegerVariable -VariableName 'EdgeInPrivateDisabled' -AllowedValues @(1) -ErrorMessage 'Edge InPrivate is enabled or missing.'
+$DownloadRestrictions = Assert-ResolvedIntegerVariable -VariableName 'DownloadRestrictions' -AllowedValues @(0, 1, 2, 3, 4) -ErrorMessage 'DownloadRestrictions is missing or invalid.'
 
-$ChromeIncognitoDisabled = Assert-ResolvedIntegerVariable `
-    -VariableName 'ChromeIncognitoDisabled' `
-    -AllowedValues @(1) `
-    -ErrorMessage 'Chrome Incognito is enabled or its control is missing.'
-
-$EdgeInPrivateDisabled = Assert-ResolvedIntegerVariable `
-    -VariableName 'EdgeInPrivateDisabled' `
-    -AllowedValues @(1) `
-    -ErrorMessage 'Edge InPrivate is enabled or its control is missing.'
-
-$DownloadRestrictions = Assert-ResolvedIntegerVariable `
-    -VariableName 'DownloadRestrictions' `
-    -AllowedValues @(0, 1, 2, 3, 4) `
-    -ErrorMessage 'DownloadRestrictions is missing or invalid.'
-
-# Confirm that the template actually consumes the rendered variables.
 $RequiredPolicyApplications = @(
-    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+''CloudAPAuthEnabled''\s+-Value\s+\$ChromeCloudAPAuthEnabled'; Message = 'CloudAPAuthEnabled is not applied to the Chrome policy root.' },
+    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+''CloudAPAuthEnabled''\s+-Value\s+\$ChromeCloudAPAuthEnabled'; Message = 'CloudAPAuthEnabled is not applied to Chrome.' },
     @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+''IncognitoModeAvailability'''; Message = 'Chrome Incognito policy application is missing.' },
     @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$EdgeRoot\s+-Name\s+''InPrivateModeAvailability'''; Message = 'Edge InPrivate policy application is missing.' },
-    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$root\s+-Name\s+''DownloadRestrictions''\s+-Value\s+\$DownloadRestrictions'; Message = 'DownloadRestrictions is not applied to both browser roots.' }
+    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$Root\s+-Name\s+''DownloadRestrictions''\s+-Value\s+\$DownloadRestrictions'; Message = 'DownloadRestrictions is not applied to both browsers.' }
 )
-
 foreach ($Check in $RequiredPolicyApplications) {
     if ($Content -notmatch $Check.Pattern) {
         throw $Check.Message
     }
 }
 
-if (
-    $Content -match "(?m)^\s*'google\.com'\s*$" -or
-    $Content -match "(?m)^\s*'\[\*\.\]google\.com'\s*$"
-) {
+if ($Content -match "(?m)^\s*'google\.com'\s*$" -or $Content -match "(?m)^\s*'\[\*\.\]google\.com'\s*$") {
     throw 'A broad Google allow rule was detected.'
 }
 
 $ArrayVariableNames = @(
-    'CommonAllowlist'
-    'ChromeOnlyAllowlist'
-    'EdgeOnlyAllowlist'
-    'GooglePersonalBlocklist'
-    'TrustedDownloadOrigins'
+    'CommonAllowlist',
+    'ChromeOnlyAllowlist',
+    'EdgeOnlyAllowlist',
+    'GooglePersonalBlocklist',
+    'TrustedDownloadOrigins',
     'OracleCookieSites'
 )
 
 foreach ($ArrayVariableName in $ArrayVariableNames) {
-    $EscapedVariableName = :Escape($ArrayVariableName)
-
-    $ArrayPattern = (
-        '(?ms)^\s*\${0}\s*=\s*@\((.*?)^\s*\)' -f
-        $EscapedVariableName
-    )
-
-    $ArrayMatch = :Match(
-        $Content,
-        $ArrayPattern
-    )
+    $EscapedVariableName = [regex]::Escape($ArrayVariableName)
+    $ArrayPattern = '(?ms)^\s*\$' + $EscapedVariableName + '\s*=\s*@\((.*?)^\s*\)'
+    $ArrayMatch = [regex]::Match($Content, $ArrayPattern)
 
     if (-not $ArrayMatch.Success) {
-        throw (
-            'Generated array was not found: ${0}' -f
-            $ArrayVariableName
-        )
+        throw ('Generated array was not found: ${0}' -f $ArrayVariableName)
     }
 
-    [string[]]$GeneratedEntries = @(
-        :Matches(
-            $ArrayMatch.Groups[1].Value,
-            "(?m)^\s*'([^']*)'\s*$"
-        ) |
-            ForEach-Object {
-                $_.Groups[1].Value
-            }
+    [System.Text.RegularExpressions.Match[]]$EntryMatches = @(
+        [regex]::Matches($ArrayMatch.Groups[1].Value, "(?m)^\s*'([^']*)'\s*$")
     )
+    if ($EntryMatches.Count -eq 0) {
+        throw ('Generated array contains no entries: ${0}' -f $ArrayVariableName)
+    }
 
-    foreach ($GeneratedEntry in $GeneratedEntries) {
-        if ($GeneratedEntry -match '\s') {
-            throw (
-                'Multiple policy values appear to be combined in ${0}: {1}' -f
-                $ArrayVariableName,
-                $GeneratedEntry
-            )
+    foreach ($EntryMatch in $EntryMatches) {
+        $Entry = $EntryMatch.Groups[1].Value
+        if ($Entry -match '\s') {
+            throw ('Multiple policy values appear combined in ${0}: {1}' -f $ArrayVariableName, $Entry)
+        }
+        if ($Entry.StartsWith('.')) {
+            throw ('Leading-dot entry found in ${0}: {1}' -f $ArrayVariableName, $Entry)
         }
     }
 }
 
-# Detect a configuration list accidentally rendered as one whitespace-separated string.
-$QuotedPolicyEntries = [regex]::Matches($Content, "(?m)^\s*'([^']+)'\s*$")
-foreach ($EntryMatch in $QuotedPolicyEntries) {
-    $Entry = $EntryMatch.Groups[1].Value
-    if ($Entry -match '\s') {
-        throw "Whitespace was detected inside a generated policy entry: $Entry"
-    }
-    if ($Entry.StartsWith('.')) {
-        throw "Leading-dot domain syntax was detected in a generated policy entry: $Entry"
-    }
+if ($Content -match 'return\s+,\s*\$CleanItems') {
+    throw 'Get-CleanUniqueList uses a unary comma and can create a nested policy array.'
+}
+if ($Content -notmatch 'return\s+\$CleanItems') {
+    throw 'Get-CleanUniqueList does not return the flat CleanItems array.'
 }
 
 $Tokens = $null
