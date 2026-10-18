@@ -1,116 +1,236 @@
-# DigiTrans - Chrome and Edge Browser Control
-# GitHub-managed template. Preserve verified DEV-7.0 policy logic below.
+# Multi-tenant Chrome and Edge browser-control template
+# This file must remain tenant-neutral. The build process replaces all {{...}} tokens.
+# Deployment target: Microsoft Intune Platform Script, 64-bit SYSTEM context.
+
+#requires -version 5.1
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$PolicyProfile = 'Developer'
+
+$OrganizationName = '{{ORGANIZATION_NAME}}'
+$TenantKey = '{{TENANT_KEY}}'
+$TenantDomain = '{{TENANT_DOMAIN}}'
+$PolicyProfile = '{{POLICY_PROFILE}}'
 $PolicyVersion = '{{POLICY_VERSION}}'
-$HomePage = 'https://www.google.com/'
-$LogFolder = 'C:\ProgramData\DigiTrans\Logs'
-$LogFile = Join-Path $LogFolder ('Browser-Control-' + $PolicyProfile + '.log')
-New-Item -Path $LogFolder -ItemType Directory -Force | Out-Null
+$HomePage = '{{HOME_PAGE}}'
 
-function Write-Log { param([Parameter(Mandatory)][string]$Message); Add-Content -LiteralPath $LogFile -Value ('{0} - {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),$Message) -Encoding UTF8 }
-function Get-CleanUniqueList { param([Parameter(Mandatory)][string[]]$Items); @($Items | ForEach-Object { if ($null -ne $_) {$_.Trim()} } | Where-Object {$_} | Sort-Object -Unique) }
-function Test-UrlPolicyEntry {
- param([Parameter(Mandatory)][string]$Entry)
- if ([string]::IsNullOrWhiteSpace($Entry)) { throw 'Empty URL policy entry detected.' }
- if ($Entry -match '<|>|&lt;|&gt;|&quot;|href=|target=|rel=|title=|class=|</?a\b|<br') { throw ('HTML detected: '+$Entry) }
- if ($Entry -match '\s') { throw ('Whitespace detected: '+$Entry) }
- if ($Entry -match ',https?://') { throw ('Multiple origins in one entry: '+$Entry) }
-}
-function Set-PolicyList {
- param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string[]]$Items)
- $Clean=Get-CleanUniqueList $Items; foreach($Item in $Clean){Test-UrlPolicyEntry $Item}
- if($Clean.Count -gt 1000){throw ('Policy exceeds 1,000 entries: '+$Clean.Count)}
- if(Test-Path -LiteralPath $Path){Remove-Item -LiteralPath $Path -Recurse -Force}
- New-Item -Path $Path -Force|Out-Null; $Index=1
- foreach($Item in $Clean){New-ItemProperty -Path $Path -Name ([string]$Index) -Value $Item -PropertyType String -Force|Out-Null;$Index++}
- return $Clean.Count
-}
+# Integer policy values rendered from tenant.json by the build script.
+$DownloadRestrictions = [int]'{{DOWNLOAD_RESTRICTIONS}}'
+$DefaultDenyEnabled = [int]'{{DEFAULT_DENY_ENABLED}}'
+$ChromeCloudAPAuthEnabled = [int]'{{CHROME_CLOUD_AP_AUTH_ENABLED}}'
+$ChromeBrowserSigninDisabled = [int]'{{CHROME_BROWSER_SIGNIN_DISABLED}}'
+$ChromeIncognitoDisabled = [int]'{{CHROME_INCOGNITO_DISABLED}}'
+$EdgeInPrivateDisabled = [int]'{{EDGE_INPRIVATE_DISABLED}}'
+$PersonalGoogleRestrictionsEnabled = [int]'{{PERSONAL_GOOGLE_RESTRICTIONS_ENABLED}}'
 
+# The build script renders configuration-file entries as single-quoted PowerShell strings.
 $CommonAllowlist = @(
 {{COMMON_ALLOWLIST}}
 )
-$ChromeOnly = @(
+
+$ChromeOnlyAllowlist = @(
 {{CHROME_ONLY_ALLOWLIST}}
 )
-$EdgeOnly = @(
+
+$EdgeOnlyAllowlist = @(
 {{EDGE_ONLY_ALLOWLIST}}
 )
-$PersonalGoogleBlocklist = @(
+
+$GooglePersonalBlocklist = @(
 {{GOOGLE_PERSONAL_BLOCKLIST}}
 )
-# Default-deny URL controls.
-# The wildcard blocks every URL that isn't explicitly allowed.
-# URLAllowlist entries take precedence over URLBlocklist entries.
 
-$ChromeBlocklist = Get-CleanUniqueList -Items @(
-    '*'
-    $PersonalGoogleBlocklist
-)
-
-$EdgeBlocklist = Get-CleanUniqueList -Items @(
-    '*'
-    $PersonalGoogleBlocklist
-)
-
-if ($ChromeBlocklist -notcontains '*') {
-    throw 'Chrome zero-trust URLBlocklist wildcard is missing.'
-}
-
-if ($EdgeBlocklist -notcontains '*') {
-    throw 'Edge zero-trust URLBlocklist wildcard is missing.'
-}
-
-$TrustedBusinessOrigins = @(
+$TrustedDownloadOrigins = @(
 {{TRUSTED_DOWNLOAD_ORIGINS}}
 )
+
 $OracleCookieSites = @(
 {{ORACLE_COOKIE_SITES}}
 )
-$ChromeAllowlist=Get-CleanUniqueList @($CommonAllowlist+$ChromeOnly)
-$EdgeAllowlist=Get-CleanUniqueList @($CommonAllowlist+$EdgeOnly)
-$ChromeBlocklist=Get-CleanUniqueList @('*'+$PersonalGoogleBlocklist)
-$EdgeBlocklist=Get-CleanUniqueList @('*'+$PersonalGoogleBlocklist)
-$ChromeRoot='HKLM:\SOFTWARE\Policies\Google\Chrome'
-$EdgeRoot='HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+
+$SafeTenantKey = $TenantKey -replace '[^A-Za-z0-9._-]', '_'
+$LogFolder = Join-Path $env:ProgramData (Join-Path $SafeTenantKey 'Logs')
+$LogFile = Join-Path $LogFolder ('Browser-Control-{0}.log' -f $PolicyProfile)
+$Marker = 'HKLM:\SOFTWARE\BrowserControl\Tenants\{0}' -f $SafeTenantKey
+$ChromeRoot = 'HKLM:\SOFTWARE\Policies\Google\Chrome'
+$EdgeRoot = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+
+New-Item -Path $LogFolder -ItemType Directory -Force | Out-Null
+
+function Write-Log {
+    param([Parameter(Mandatory = $true)][string]$Message)
+    $line = '{0} - {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
+    Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8
+}
+
+function ConvertTo-PolicyFlag {
+    param(
+        [Parameter(Mandatory = $true)][int]$Value,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    if ($Value -notin @(0, 1)) {
+        throw "$Name must be 0 or 1. Current value: $Value"
+    }
+    return $Value
+}
+
+function Test-TemplateRendered {
+    $unresolved = @(
+        $OrganizationName, $TenantKey, $TenantDomain, $PolicyProfile,
+        $PolicyVersion, $HomePage
+    ) | Where-Object { $_ -match '\{\{[^}]+\}\}' }
+
+    if ($unresolved.Count -gt 0) {
+        throw 'The generated script contains unresolved scalar template tokens.'
+    }
+
+    $rawScript = Get-Content -LiteralPath $PSCommandPath -Raw
+    if ($rawScript -match '\{\{[A-Z0-9_]+\}\}') {
+        throw ('The generated script contains an unresolved token: ' + $Matches[0])
+    }
+}
+
+function Get-CleanUniqueList {
+    param([AllowEmptyCollection()][string[]]$Items)
+    return @(
+        $Items |
+            ForEach-Object {
+                if ($null -ne $_) { $_.Trim() }
+            } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Sort-Object -Unique
+    )
+}
+
+function Test-UrlPolicyEntry {
+    param([Parameter(Mandatory = $true)][string]$Entry)
+
+    if ($Entry -match '<|>|&lt;|&gt;|&quot;|href=|target=|rel=|title=|class=|</?a\b|<br') {
+        throw ('HTML detected in URL policy entry: ' + $Entry)
+    }
+    if ($Entry -match '\s') {
+        throw ('Whitespace detected in URL policy entry: ' + $Entry)
+    }
+    if ($Entry -match ',https?://') {
+        throw ('Multiple origins found in one policy entry: ' + $Entry)
+    }
+    if ($Entry.StartsWith('.')) {
+        throw ('Leading-dot domain syntax is not permitted: ' + $Entry)
+    }
+}
+
+function Set-PolicyList {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [AllowEmptyCollection()][string[]]$Items
+    )
+
+    $clean = Get-CleanUniqueList -Items $Items
+    foreach ($item in $clean) {
+        Test-UrlPolicyEntry -Entry $item
+    }
+    if ($clean.Count -gt 1000) {
+        throw ('Policy exceeds 1,000 entries: ' + $clean.Count)
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+        Remove-Item -LiteralPath $Path -Recurse -Force
+    }
+    New-Item -Path $Path -Force | Out-Null
+
+    $index = 1
+    foreach ($item in $clean) {
+        New-ItemProperty -Path $Path -Name ([string]$index) -Value $item -PropertyType String -Force | Out-Null
+        $index++
+    }
+    return $clean.Count
+}
+
+function Set-DWordPolicy {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][int]$Value
+    )
+    New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType DWord -Force | Out-Null
+}
 
 try {
- Write-Log ('Starting '+$PolicyVersion)
- foreach($e in @($CommonAllowlist+$ChromeOnly+$EdgeOnly+$PersonalGoogleBlocklist+$TrustedBusinessOrigins+$OracleCookieSites)){Test-UrlPolicyEntry $e}
- New-Item -Path $ChromeRoot -Force|Out-Null; New-Item -Path $EdgeRoot -Force|Out-Null
- foreach($Root in @($ChromeRoot,$EdgeRoot)){
-  New-ItemProperty -Path $Root -Name HomepageLocation -Value $HomePage -PropertyType String -Force|Out-Null
-  New-ItemProperty -Path $Root -Name HomepageIsNewTabPage -Value 0 -PropertyType DWord -Force|Out-Null
-  New-ItemProperty -Path $Root -Name ShowHomeButton -Value 1 -PropertyType DWord -Force|Out-Null
-  New-ItemProperty -Path $Root -Name RestoreOnStartup -Value 4 -PropertyType DWord -Force|Out-Null
-  New-ItemProperty -Path $Root -Name DeveloperToolsAvailability -Value 1 -PropertyType DWord -Force|Out-Null
-  New-ItemProperty -Path $Root -Name PrintingEnabled -Value 1 -PropertyType DWord -Force|Out-Null
-  New-ItemProperty -Path $Root -Name AlwaysOpenPdfExternally -Value 0 -PropertyType DWord -Force|Out-Null
-  New-ItemProperty -Path $Root -Name DownloadRestrictions -Value 1 -PropertyType DWord -Force|Out-Null
- }
- New-ItemProperty -Path $ChromeRoot -Name CloudAPAuthEnabled -Value 1 -PropertyType DWord -Force|Out-Null
- New-ItemProperty -Path $ChromeRoot -Name BrowserSignin -Value 0 -PropertyType DWord -Force|Out-Null
- New-ItemProperty -Path $ChromeRoot -Name SecondaryGoogleAccountSigninAllowed -Value 0 -PropertyType DWord -Force|Out-Null
- New-ItemProperty -Path $ChromeRoot -Name IncognitoModeAvailability -Value 1 -PropertyType DWord -Force|Out-Null
- New-ItemProperty -Path $EdgeRoot -Name InPrivateModeAvailability -Value 1 -PropertyType DWord -Force|Out-Null
- [void](Set-PolicyList (Join-Path $ChromeRoot 'ExtensionInstallBlocklist') @('*'))
- [void](Set-PolicyList (Join-Path $ChromeRoot 'RestoreOnStartupURLs') @($HomePage))
- [void](Set-PolicyList (Join-Path $EdgeRoot 'RestoreOnStartupURLs') @($HomePage))
- $ChromeCount=Set-PolicyList (Join-Path $ChromeRoot 'URLAllowlist') $ChromeAllowlist
- [void](Set-PolicyList (Join-Path $ChromeRoot 'URLBlocklist') $ChromeBlocklist)
- $EdgeCount=Set-PolicyList (Join-Path $EdgeRoot 'URLAllowlist') $EdgeAllowlist
- [void](Set-PolicyList (Join-Path $EdgeRoot 'URLBlocklist') $EdgeBlocklist)
- [void](Set-PolicyList (Join-Path $ChromeRoot 'AutomaticDownloadsAllowedForUrls') $TrustedBusinessOrigins)
- [void](Set-PolicyList (Join-Path $EdgeRoot 'AutomaticDownloadsAllowedForUrls') $TrustedBusinessOrigins)
- [void](Set-PolicyList (Join-Path $ChromeRoot 'PopupsAllowedForUrls') $TrustedBusinessOrigins)
- [void](Set-PolicyList (Join-Path $EdgeRoot 'PopupsAllowedForUrls') $TrustedBusinessOrigins)
- [void](Set-PolicyList (Join-Path $ChromeRoot 'CookiesAllowedForUrls') $OracleCookieSites)
- [void](Set-PolicyList (Join-Path $EdgeRoot 'CookiesAllowedForUrls') $OracleCookieSites)
- $Marker='HKLM:\SOFTWARE\DigiTrans\BrowserControl';New-Item -Path $Marker -Force|Out-Null
- New-ItemProperty -Path $Marker -Name PolicyProfile -Value $PolicyProfile -PropertyType String -Force|Out-Null
- New-ItemProperty -Path $Marker -Name PolicyVersion -Value $PolicyVersion -PropertyType String -Force|Out-Null
- New-ItemProperty -Path $Marker -Name LastAppliedUtc -Value ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')) -PropertyType String -Force|Out-Null
- New-ItemProperty -Path $Marker -Name ChromeAllowlistCount -Value $ChromeCount -PropertyType DWord -Force|Out-Null
- New-ItemProperty -Path $Marker -Name EdgeAllowlistCount -Value $EdgeCount -PropertyType DWord -Force|Out-Null
- Write-Log ('Completed. Chrome={0}; Edge={1}' -f $ChromeCount,$EdgeCount); exit 0
-} catch { Write-Log ('ERROR: '+$_.Exception.Message); Write-Error $_.Exception.Message; exit 1 }
+    Test-TemplateRendered
+
+    $DefaultDenyEnabled = ConvertTo-PolicyFlag $DefaultDenyEnabled 'defaultDeny'
+    $ChromeCloudAPAuthEnabled = ConvertTo-PolicyFlag $ChromeCloudAPAuthEnabled 'chromeCloudAPAuthEnabled'
+    $ChromeBrowserSigninDisabled = ConvertTo-PolicyFlag $ChromeBrowserSigninDisabled 'chromeBrowserSigninDisabled'
+    $ChromeIncognitoDisabled = ConvertTo-PolicyFlag $ChromeIncognitoDisabled 'chromeIncognitoDisabled'
+    $EdgeInPrivateDisabled = ConvertTo-PolicyFlag $EdgeInPrivateDisabled 'edgeInPrivateDisabled'
+    $PersonalGoogleRestrictionsEnabled = ConvertTo-PolicyFlag $PersonalGoogleRestrictionsEnabled 'personalGoogleRestrictionsEnabled'
+
+    if ($DownloadRestrictions -notin @(0, 1, 2, 3, 4)) {
+        throw "downloadRestrictions must be 0, 1, 2, 3, or 4. Current value: $DownloadRestrictions"
+    }
+
+    Write-Log ('Starting {0}/{1}, profile {2}, version {3}' -f $OrganizationName, $TenantKey, $PolicyProfile, $PolicyVersion)
+
+    New-Item -Path $ChromeRoot -Force | Out-Null
+    New-Item -Path $EdgeRoot -Force | Out-Null
+
+    foreach ($root in @($ChromeRoot, $EdgeRoot)) {
+        New-ItemProperty -Path $root -Name 'HomepageLocation' -Value $HomePage -PropertyType String -Force | Out-Null
+        Set-DWordPolicy -Path $root -Name 'HomepageIsNewTabPage' -Value 0
+        Set-DWordPolicy -Path $root -Name 'ShowHomeButton' -Value 1
+        Set-DWordPolicy -Path $root -Name 'RestoreOnStartup' -Value 4
+        Set-DWordPolicy -Path $root -Name 'DeveloperToolsAvailability' -Value 1
+        Set-DWordPolicy -Path $root -Name 'PrintingEnabled' -Value 1
+        Set-DWordPolicy -Path $root -Name 'AlwaysOpenPdfExternally' -Value 0
+        Set-DWordPolicy -Path $root -Name 'DownloadRestrictions' -Value $DownloadRestrictions
+    }
+
+    Set-DWordPolicy -Path $ChromeRoot -Name 'CloudAPAuthEnabled' -Value $ChromeCloudAPAuthEnabled
+    Set-DWordPolicy -Path $ChromeRoot -Name 'BrowserSignin' -Value $(if ($ChromeBrowserSigninDisabled) { 0 } else { 1 })
+    Set-DWordPolicy -Path $ChromeRoot -Name 'IncognitoModeAvailability' -Value $(if ($ChromeIncognitoDisabled) { 1 } else { 0 })
+    Set-DWordPolicy -Path $EdgeRoot -Name 'InPrivateModeAvailability' -Value $(if ($EdgeInPrivateDisabled) { 1 } else { 0 })
+
+    $chromeAllowlist = Get-CleanUniqueList -Items @($CommonAllowlist + $ChromeOnlyAllowlist)
+    $edgeAllowlist = Get-CleanUniqueList -Items @($CommonAllowlist + $EdgeOnlyAllowlist)
+
+    $baseBlocklist = @()
+    if ($DefaultDenyEnabled -eq 1) {
+        $baseBlocklist += '*'
+    }
+    if ($PersonalGoogleRestrictionsEnabled -eq 1) {
+        $baseBlocklist += $GooglePersonalBlocklist
+        Set-DWordPolicy -Path $ChromeRoot -Name 'SecondaryGoogleAccountSigninAllowed' -Value 0
+    }
+
+    $chromeCount = Set-PolicyList -Path (Join-Path $ChromeRoot 'URLAllowlist') -Items $chromeAllowlist
+    $edgeCount = Set-PolicyList -Path (Join-Path $EdgeRoot 'URLAllowlist') -Items $edgeAllowlist
+    [void](Set-PolicyList -Path (Join-Path $ChromeRoot 'URLBlocklist') -Items $baseBlocklist)
+    [void](Set-PolicyList -Path (Join-Path $EdgeRoot 'URLBlocklist') -Items $baseBlocklist)
+
+    # These origins control automatic downloads and popups. They do not bypass Defender or SmartScreen.
+    foreach ($root in @($ChromeRoot, $EdgeRoot)) {
+        [void](Set-PolicyList -Path (Join-Path $root 'AutomaticDownloadsAllowedForUrls') -Items $TrustedDownloadOrigins)
+        [void](Set-PolicyList -Path (Join-Path $root 'PopupsAllowedForUrls') -Items $TrustedDownloadOrigins)
+        [void](Set-PolicyList -Path (Join-Path $root 'CookiesAllowedForUrls') -Items $OracleCookieSites)
+    }
+
+    New-Item -Path $Marker -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'OrganizationName' -Value $OrganizationName -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'TenantKey' -Value $TenantKey -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'TenantDomain' -Value $TenantDomain -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'PolicyProfile' -Value $PolicyProfile -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'PolicyVersion' -Value $PolicyVersion -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'LastAppliedUtc' -Value ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')) -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'ChromeAllowlistCount' -Value $chromeCount -PropertyType DWord -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'EdgeAllowlistCount' -Value $edgeCount -PropertyType DWord -Force | Out-Null
+    New-ItemProperty -Path $Marker -Name 'DownloadRestrictions' -Value $DownloadRestrictions -PropertyType DWord -Force | Out-Null
+
+    Write-Log ('Completed successfully. Chrome allowlist={0}; Edge allowlist={1}; DownloadRestrictions={2}' -f $chromeCount, $edgeCount, $DownloadRestrictions)
+    Write-Output ('{0} browser-control policy {1} installed successfully.' -f $OrganizationName, $PolicyVersion)
+    exit 0
+}
+catch {
+    Write-Log ('ERROR: ' + $_.Exception.Message)
+    Write-Log ('ERROR LINE: ' + $_.InvocationInfo.ScriptLineNumber)
+    Write-Error $_.Exception.Message
+    exit 1
+}
