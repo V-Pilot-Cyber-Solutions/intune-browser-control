@@ -1,0 +1,11 @@
+https://vakuai.com
+[*.]vakuai.com
+https://helpdesk.mawaridhi.com
+https://oracle.com
+https://community.oracle.com
+https://profile.oracle.com
+https://signon.oracle.com
+https://ewnp-dev2.fa.ocs.oraclecloud.com
+https://oic-vbcs-sitoic-vb-frwn5kltrtdv.builder.me-dubai-1.ocp.oraclecloud.com
+https://idcs-85fbf04fd21b4cfdb83aff8ff35ee6b9.identity.oraclecloud.com
+https://frald-dev.aldar.com

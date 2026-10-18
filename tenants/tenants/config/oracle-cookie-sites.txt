@@ -1,0 +1,10 @@
+[*.]oracle.com
+[*.]oraclecloud.com
+[*.]oraclecloudapps.com
+[*.]v-cdn.net
+https://community.oracle.com
+https://profile.oracle.com
+https://signon.oracle.com
+https://static.oracle.com
+https://us.v-cdn.net
+https://consent.truste.com
