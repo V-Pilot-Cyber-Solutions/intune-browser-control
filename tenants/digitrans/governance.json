@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "tenantKey": "digitrans",
+  "tenantId": "CUSTOMER-TENANT-ID",
+  "displayName": "DigiTrans",
+  "dataResidency": "customer-approved-region",
+  "collection": {
+    "enabled": true,
+    "schedule": "0 */6 * * *",
+    "retainRawEvidenceDays": 365,
+    "retainNormalizedRecordsDays": 2555
+  },
+  "modules": {
+    "privilegedAccess": true,
+    "accessReviews": true,
+    "conditionalAccess": true,
+    "applicationConsent": true,
+    "signInCoverage": true,
+    "browserControlCompliance": true
+  },
+  "baselines": {
+    "maximumPermanentGlobalAdministrators": 2,
+    "maximumPrivilegedAssignmentAgeDays": 90,
+    "maximumAccessReviewOverdueDays": 7,
+    "requireMfaForAdministrators": true,
+    "requirePhishingResistantMfaForCriticalRoles": true,
+    "requireBlockLegacyAuthentication": true,
+    "requireEmergencyAccessAccounts": 2,
+    "requireBrowserControlDeployment": true,
+    "browserPolicyMaximumAgeHours": 24
+  },
+  "review": {
+    "privilegedAccessFrequencyDays": 30,
+    "conditionalAccessFrequencyDays": 90,
+    "applicationConsentFrequencyDays": 90,
+    "accessReviewEvidenceFrequencyDays": 30
+  },
+  "owners": {
+    "iam": "iam-team",
+    "security": "security-team",
+    "compliance": "compliance-team"
+  }
+}
