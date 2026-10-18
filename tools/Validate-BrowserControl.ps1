@@ -103,6 +103,56 @@ if (
     throw 'A broad Google allow rule was detected.'
 }
 
+$ArrayVariableNames = @(
+    'CommonAllowlist'
+    'ChromeOnlyAllowlist'
+    'EdgeOnlyAllowlist'
+    'GooglePersonalBlocklist'
+    'TrustedDownloadOrigins'
+    'OracleCookieSites'
+)
+
+foreach ($ArrayVariableName in $ArrayVariableNames) {
+    $EscapedVariableName = :Escape($ArrayVariableName)
+
+    $ArrayPattern = (
+        '(?ms)^\s*\${0}\s*=\s*@\((.*?)^\s*\)' -f
+        $EscapedVariableName
+    )
+
+    $ArrayMatch = :Match(
+        $Content,
+        $ArrayPattern
+    )
+
+    if (-not $ArrayMatch.Success) {
+        throw (
+            'Generated array was not found: ${0}' -f
+            $ArrayVariableName
+        )
+    }
+
+    [string[]]$GeneratedEntries = @(
+        :Matches(
+            $ArrayMatch.Groups[1].Value,
+            "(?m)^\s*'([^']*)'\s*$"
+        ) |
+            ForEach-Object {
+                $_.Groups[1].Value
+            }
+    )
+
+    foreach ($GeneratedEntry in $GeneratedEntries) {
+        if ($GeneratedEntry -match '\s') {
+            throw (
+                'Multiple policy values appear to be combined in ${0}: {1}' -f
+                $ArrayVariableName,
+                $GeneratedEntry
+            )
+        }
+    }
+}
+
 # Detect a configuration list accidentally rendered as one whitespace-separated string.
 $QuotedPolicyEntries = [regex]::Matches($Content, "(?m)^\s*'([^']+)'\s*$")
 foreach ($EntryMatch in $QuotedPolicyEntries) {
