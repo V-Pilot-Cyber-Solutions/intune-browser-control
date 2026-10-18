@@ -136,6 +136,7 @@ s-microsoft.com
 update.microsoft.com
 windowsupdate.com
 wns.windows.com
+x.com
 
 # ============================================================================
 # Google Search, Authentication and Chrome Services (11)
