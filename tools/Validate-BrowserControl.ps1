@@ -84,10 +84,10 @@ $DownloadRestrictions = Assert-ResolvedIntegerVariable `
 
 # Confirm that the template actually consumes the rendered variables.
 $RequiredPolicyApplications = @(
-    @{ Pattern = "Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+'CloudAPAuthEnabled'\s+-Value\s+\$ChromeCloudAPAuthEnabled"; Message = 'CloudAPAuthEnabled is not applied to the Chrome policy root.' },
-    @{ Pattern = "Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+'IncognitoModeAvailability'"; Message = 'Chrome Incognito policy application is missing.' },
-    @{ Pattern = "Set-DWordPolicy\s+-Path\s+\$EdgeRoot\s+-Name\s+'InPrivateModeAvailability'"; Message = 'Edge InPrivate policy application is missing.' },
-    @{ Pattern = "Set-DWordPolicy\s+-Path\s+\$root\s+-Name\s+'DownloadRestrictions'\s+-Value\s+\$DownloadRestrictions"; Message = 'DownloadRestrictions is not applied to both browser roots.' }
+    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+''CloudAPAuthEnabled''\s+-Value\s+\$ChromeCloudAPAuthEnabled'; Message = 'CloudAPAuthEnabled is not applied to the Chrome policy root.' },
+    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$ChromeRoot\s+-Name\s+''IncognitoModeAvailability'''; Message = 'Chrome Incognito policy application is missing.' },
+    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$EdgeRoot\s+-Name\s+''InPrivateModeAvailability'''; Message = 'Edge InPrivate policy application is missing.' },
+    @{ Pattern = 'Set-DWordPolicy\s+-Path\s+\$root\s+-Name\s+''DownloadRestrictions''\s+-Value\s+\$DownloadRestrictions'; Message = 'DownloadRestrictions is not applied to both browser roots.' }
 )
 
 foreach ($Check in $RequiredPolicyApplications) {
