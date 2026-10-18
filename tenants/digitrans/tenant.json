@@ -1,0 +1,10 @@
+{
+  "tenantKey": "digitrans",
+  "organizationName": "DigiTrans",
+  "policyProfile": "Developer",
+  "intuneDisplayName": "DigiTrans - Chrome and Edge Browser Control",
+  "executionContext": "system",
+  "runAs32Bit": false,
+  "signatureCheck": false,
+  "githubEnvironment": "digitrans-production"
+}
