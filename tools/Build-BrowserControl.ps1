@@ -130,11 +130,11 @@ function Convert-PolicyList {
     }
 
     return (
-        $Entries |
-            ForEach-Object {
-                "    '$($_.Replace("'", "''"))'"
-            }
-    ) -join :NewLine
+    $Entries |
+        ForEach-Object {
+            "    '$($_.Replace("'", "''"))'"
+        }
+) -join [Environment]::NewLine
 }
 
 $Template = Get-Content `
