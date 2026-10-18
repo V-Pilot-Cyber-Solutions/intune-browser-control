@@ -141,14 +141,13 @@ x.com
 # ============================================================================
 # Google Search, Authentication and Chrome Services (11)
 # ============================================================================
-.accounts.google.com
-.chrome.google.com
-.chromewebstore.google.com
-.clients2.google.com
-.clients4.google.com
-.colab.research.google.com
-.gstatic.com
-.www.google.com
+chrome.google.com
+chromewebstore.google.com
+clients2.google.com
+clients4.google.com
+colab.research.google.com
+gstatic.com
+www.google.com
 googleapis.com
 googletagmanager.com
 stitch.withgoogle.com
