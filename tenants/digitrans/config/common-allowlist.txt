@@ -137,6 +137,7 @@ update.microsoft.com
 windowsupdate.com
 wns.windows.com
 x.com
+pocketfm.com
 
 # ============================================================================
 # Google Search, Authentication and Chrome Services (11)
