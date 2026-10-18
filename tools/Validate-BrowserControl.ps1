@@ -27,7 +27,7 @@ function Assert-ResolvedIntegerVariable {
     )
 
     $EscapedName = [regex]::Escape($VariableName)
-    $Pattern = '(?m)^\s*\$' + $EscapedName + '\s*=\s*\[int\]\s*[\'\"]?([0-9]+)[\'\"]?\s*$'
+    $Pattern = '(?m)^\s*\$' + $EscapedName + '\s*=\s*\[int\]\s*[''"]?([0-9]+)[''"]?\s*$'
     $Match = [regex]::Match($Content, $Pattern)
 
     if (-not $Match.Success) {
