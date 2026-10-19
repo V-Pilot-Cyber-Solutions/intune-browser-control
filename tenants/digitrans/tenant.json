@@ -4,7 +4,7 @@
   "organizationName": "DigiTrans",
   "tenantDomain": "digitrans.partners",
   "policyProfile": "Developer",
-  "policyVersion": "DEV-9.5",
+  "policyVersion": "DEV-7.5",
   "intuneDisplayName": "GitHub- Chrome and Edge Browser Control DEV-9",
   "intuneFileName": "DigiTrans-Browser-Control-Developer.ps1",
   "githubEnvironment": "digitrans-production",
@@ -26,7 +26,7 @@
   "deploymentSync": {
     "enabled": true,
     "groupIds": [
-      "b2e5ce03-611a-49d3-81f7-36e5cce807b3"
+      "3dd5166b-bddd-4296-a23c-ca1068ed23fa"
     ],
     "operatingSystems": [
       "Windows"
