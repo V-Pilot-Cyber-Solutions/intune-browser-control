@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "profileKey": "standard-employee",
+  "displayName": "Standard Employee Restricted",
+  "policyVersionPrefix": "EMP",
+  "intuneDisplayName": "GitHub - Browser Control - Standard Employee",
+  "intuneFileName": "DigiTrans-Browser-Control-Standard-Employee.ps1",
+  "assignment": {
+    "groupIds": [
+      "b2e5ce03-611a-49d3-81f7-36e5cce807b3"
+    ],
+    "maximumDevices": 2000
+  },
+  "policyControls": {
+    "defaultDeny": true,
+    "downloadRestrictions": 0,
+    "developerToolsAvailability": 2,
+    "chromeCloudAPAuthEnabled": true,
+    "chromeBrowserSigninDisabled": true,
+    "chromeIncognitoDisabled": true,
+    "edgeInPrivateDisabled": true,
+    "personalGoogleRestrictionsEnabled": true,
+    "allowLocalDevelopment": false
+  },
+  "configurationFiles": {
+    "sharedAllowlist": "../config/shared/business-allowlist.txt",
+    "profileAllowlist": "../config/standard-employee/common-allowlist.txt",
+    "chromeOnlyAllowlist": "../config/standard-employee/chrome-only-allowlist.txt",
+    "edgeOnlyAllowlist": "../config/standard-employee/edge-only-allowlist.txt",
+    "googlePersonalBlocklist": "../config/shared/google-personal-blocklist.txt"
+  }
+}
