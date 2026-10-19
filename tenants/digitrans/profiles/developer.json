@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "profileKey": "developer",
+  "displayName": "Developer Restricted",
+  "policyVersionPrefix": "DEV",
+  "intuneDisplayName": "GitHub - Browser Control - Developer",
+  "intuneFileName": "DigiTrans-Browser-Control-Developer.ps1",
+  "assignment": {
+    "groupIds": [
+      "3dd5166b-bddd-4296-a23c-ca1068ed23fa"
+    ],
+    "maximumDevices": 250
+  },
+  "policyControls": {
+    "defaultDeny": true,
+    "downloadRestrictions": 0,
+    "developerToolsAvailability": 1,
+    "chromeCloudAPAuthEnabled": true,
+    "chromeBrowserSigninDisabled": true,
+    "chromeIncognitoDisabled": true,
+    "edgeInPrivateDisabled": true,
+    "personalGoogleRestrictionsEnabled": true,
+    "allowLocalDevelopment": true
+  },
+  "configurationFiles": {
+    "sharedAllowlist": "../config/shared/business-allowlist.txt",
+    "profileAllowlist": "../config/developer/common-allowlist.txt",
+    "chromeOnlyAllowlist": "../config/developer/chrome-only-allowlist.txt",
+    "edgeOnlyAllowlist": "../config/developer/edge-only-allowlist.txt",
+    "googlePersonalBlocklist": "../config/shared/google-personal-blocklist.txt"
+  }
+}
