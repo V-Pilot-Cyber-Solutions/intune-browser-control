@@ -181,10 +181,11 @@ foreach ($GroupId in $GroupIds) {
 
     $EncodedGroupId = [uri]::EscapeDataString($GroupId)
     $MembersUri = (
-        '{0}/groups/{1}/transitiveMembers/microsoft.graph.device' +
-        '?$select=id,deviceId,displayName,accountEnabled' -f
-        $GraphBaseUri,
-        $EncodedGroupId
+        $GraphBaseUri +
+        '/groups/' +
+        $EncodedGroupId +
+        '/transitiveMembers/microsoft.graph.device' +
+        '?$select=id,deviceId,displayName,accountEnabled'
     )
 
     [object[]]$GroupDevices = @(Get-GraphCollection -Uri $MembersUri)
@@ -212,9 +213,9 @@ if ($EntraDeviceObjects.Count -gt $MaximumDevices) {
 }
 
 $ManagedDevicesUri = (
-    '{0}/deviceManagement/managedDevices' +
-    '?$select=id,deviceName,azureADDeviceId,operatingSystem,managementState,lastSyncDateTime' -f
-    $GraphBaseUri
+    $GraphBaseUri +
+    '/deviceManagement/managedDevices' +
+    '?$select=id,deviceName,azureADDeviceId,operatingSystem,managementState,lastSyncDateTime'
 )
 
 [object[]]$ManagedDevices = @(Get-GraphCollection -Uri $ManagedDevicesUri)
@@ -276,9 +277,16 @@ foreach ($EntraDevice in $EntraDeviceObjects) {
         continue
     }
 
-    $SyncUri = '{0}/deviceManagement/managedDevices/{1}/syncDevice' -f `
-        $GraphBaseUri,
-        [uri]::EscapeDataString([string]$ManagedDevice.id)
+    $EncodedManagedDeviceId = [uri]::EscapeDataString(
+        [string]$ManagedDevice.id
+    )
+
+    $SyncUri = (
+        $GraphBaseUri +
+        '/deviceManagement/managedDevices/' +
+        $EncodedManagedDeviceId +
+        '/syncDevice'
+    )
 
     try {
         Invoke-GraphRequest -Method POST -Uri $SyncUri
