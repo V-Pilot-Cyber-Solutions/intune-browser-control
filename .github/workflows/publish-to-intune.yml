@@ -1,46 +1,155 @@
-name: Publish DigiTrans browser control to Intune
+name: Publish multitenant browser control to Intune
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: DigiTrans browser-policy version
+      tenantKey:
+        description: Tenant key matching the tenants/<tenantKey> directory
         required: true
-        default: DEV-7.1
+        default: digitrans
         type: string
+
+      version:
+        description: Browser-policy version
+        required: true
+        default: DEV-9.6
+        type: string
+
+      targetEnvironment:
+        description: GitHub environment containing the tenant configuration
+        required: true
+        default: digitrans-production
+        type: environment
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: digitrans-intune-browser-control
+  group: intune-browser-control-${{ inputs.tenantKey }}
   cancel-in-progress: false
 
 jobs:
   build-validate-publish:
+    name: Build, validate, publish, and sync
     runs-on: windows-latest
-    environment: digitrans-production
+    environment: ${{ inputs.targetEnvironment }}
+
+    env:
+      TENANT_KEY: ${{ inputs.tenantKey }}
+      POLICY_VERSION: ${{ inputs.version }}
+      OUTPUT_DIRECTORY: output/${{ inputs.tenantKey }}
+      OUTPUT_FILE: output/${{ inputs.tenantKey }}/Browser-Control.ps1
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build DigiTrans policy
+      - name: Validate workflow inputs
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+
+          if ($env:TENANT_KEY -notmatch '^[a-z0-9-]+$') {
+              throw "Invalid tenant key: $env:TENANT_KEY"
+          }
+
+          if ($env:POLICY_VERSION -notmatch '^[A-Za-z0-9._-]+$') {
+              throw "Invalid policy version: $env:POLICY_VERSION"
+          }
+
+          $TenantRoot = Join-Path `
+              -Path $env:GITHUB_WORKSPACE `
+              -ChildPath "tenants\$env:TENANT_KEY"
+
+          $TenantJsonPath = Join-Path `
+              -Path $TenantRoot `
+              -ChildPath 'tenant.json'
+
+          if (-not (Test-Path -LiteralPath $TenantJsonPath)) {
+              throw "Tenant metadata was not found: $TenantJsonPath"
+          }
+
+      - name: Load tenant metadata
+        id: tenant
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $TenantJsonPath = Join-Path `
+              -Path $env:GITHUB_WORKSPACE `
+              -ChildPath "tenants\$env:TENANT_KEY\tenant.json"
+
+          $Tenant = Get-Content `
+              -LiteralPath $TenantJsonPath `
+              -Raw `
+              -Encoding UTF8 |
+                  ConvertFrom-Json -ErrorAction Stop
+
+          if ([string]$Tenant.tenantKey -ne $env:TENANT_KEY) {
+              throw "Tenant key mismatch in tenant.json."
+          }
+
+          if ([string]::IsNullOrWhiteSpace(
+              [string]$Tenant.organizationName
+          )) {
+              throw 'organizationName is missing from tenant.json.'
+          }
+
+          if ([string]::IsNullOrWhiteSpace(
+              [string]$Tenant.intuneFileName
+          )) {
+              throw 'intuneFileName is missing from tenant.json.'
+          }
+
+          $OutputDirectory = Join-Path `
+              -Path $env:GITHUB_WORKSPACE `
+              -ChildPath "output\$env:TENANT_KEY"
+
+          $OutputPath = Join-Path `
+              -Path $OutputDirectory `
+              -ChildPath ([string]$Tenant.intuneFileName)
+
+          "organizationName=$($Tenant.organizationName)" |
+              Out-File `
+                  -FilePath $env:GITHUB_OUTPUT `
+                  -Encoding utf8 `
+                  -Append
+
+          "intuneFileName=$($Tenant.intuneFileName)" |
+              Out-File `
+                  -FilePath $env:GITHUB_OUTPUT `
+                  -Encoding utf8 `
+                  -Append
+
+          "outputPath=$OutputPath" |
+              Out-File `
+                  -FilePath $env:GITHUB_OUTPUT `
+                  -Encoding utf8 `
+                  -Append
+
+          Write-Host "Tenant: $($Tenant.organizationName)"
+          Write-Host "Output: $OutputPath"
+
+      - name: Build tenant policy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
           ./tools/Build-BrowserControl.ps1 `
-            -TenantKey 'digitrans' `
-            -Version '${{ inputs.version }}' `
-            -OutputPath './output/digitrans/DigiTrans-Browser-Control-Developer.ps1'
+              -TenantKey $env:TENANT_KEY `
+              -Version $env:POLICY_VERSION `
+              -OutputPath '${{ steps.tenant.outputs.outputPath }}'
 
-      - name: Validate DigiTrans policy
+      - name: Validate tenant policy
         shell: pwsh
         run: |
-          ./tools/Validate-BrowserControl.ps1 `
-            -ScriptPath './output/digitrans/DigiTrans-Browser-Control-Developer.ps1'
+          $ErrorActionPreference = 'Stop'
 
-      - name: Authenticate to DigiTrans using OIDC
+          ./tools/Validate-BrowserControl.ps1 `
+              -ScriptPath '${{ steps.tenant.outputs.outputPath }}'
+
+      - name: Authenticate to tenant using OIDC
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -48,131 +157,223 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Verify and update existing Intune script
+        id: publish
         shell: pwsh
         env:
           INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
           EXPECTED_DISPLAY_NAME: ${{ vars.INTUNE_EXPECTED_DISPLAY_NAME }}
-          POLICY_VERSION: ${{ inputs.version }}
+          GENERATED_SCRIPT_PATH: ${{ steps.tenant.outputs.outputPath }}
+          GENERATED_FILE_NAME: ${{ steps.tenant.outputs.intuneFileName }}
+          ORGANIZATION_NAME: ${{ steps.tenant.outputs.organizationName }}
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $ScriptPath = Join-Path `
-            -Path $env:GITHUB_WORKSPACE `
-            -ChildPath 'output\digitrans\DigiTrans-Browser-Control-Developer.ps1'
+          if (-not (Test-Path -LiteralPath $env:GENERATED_SCRIPT_PATH)) {
+              throw "Generated script was not found: $env:GENERATED_SCRIPT_PATH"
+          }
 
-          if (-not (Test-Path -LiteralPath $ScriptPath)) {
-              throw "Generated script was not found: $ScriptPath"
+          $GuidPattern = (
+              '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-' +
+              '[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' +
+              '[0-9a-fA-F]{12}$'
+          )
+
+          if (
+              [string]::IsNullOrWhiteSpace($env:INTUNE_SCRIPT_ID) -or
+              $env:INTUNE_SCRIPT_ID -notmatch $GuidPattern
+          ) {
+              throw (
+                  'INTUNE_SCRIPT_ID must be configured as a valid GUID ' +
+                  'in the selected GitHub environment.'
+              )
+          }
+
+          if (
+              [string]::IsNullOrWhiteSpace(
+                  $env:EXPECTED_DISPLAY_NAME
+              )
+          ) {
+              throw (
+                  'INTUNE_EXPECTED_DISPLAY_NAME is missing from the ' +
+                  'selected GitHub environment.'
+              )
           }
 
           $Token = az account get-access-token `
-            --resource-type ms-graph `
-            --query accessToken `
-            --output tsv
+              --resource-type ms-graph `
+              --query accessToken `
+              --output tsv
 
-          if ([System.String]::IsNullOrWhiteSpace($Token)) {
+          if (
+              $LASTEXITCODE -ne 0 -or
+              [string]::IsNullOrWhiteSpace($Token)
+          ) {
               throw 'Microsoft Graph access token was not returned.'
           }
 
-          if ([System.String]::IsNullOrWhiteSpace($env:EXPECTED_DISPLAY_NAME)) {
-              throw 'INTUNE_EXPECTED_DISPLAY_NAME is empty.'
-          }
-
           $Headers = @{
-              Authorization = "Bearer $Token"
-              Accept = 'application/json'
+              Authorization  = "Bearer $Token"
+              Accept         = 'application/json'
               'Content-Type' = 'application/json'
           }
 
           $ScriptId = $env:INTUNE_SCRIPT_ID
-          $GuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+          $ScriptUri = (
+              'https://graph.microsoft.com/beta/' +
+              'deviceManagement/deviceManagementScripts/' +
+              $ScriptId
+          )
 
-          if ([System.String]::IsNullOrWhiteSpace($ScriptId) -or $ScriptId -notmatch $GuidPattern) {
-              Write-Host 'INTUNE_SCRIPT_ID is absent or not a GUID. Resolving the script by exact display name.'
+          Write-Host 'Retrieving existing Intune script.'
 
-              $ListUri = 'https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts?$select=id,displayName,fileName,lastModifiedDateTime&$top=100'
-              $ListResponse = Invoke-RestMethod `
-                -Method Get `
-                -Uri $ListUri `
-                -Headers $Headers
-
-              $Matches = @(
-                  $ListResponse.value | Where-Object {
-                      $_.displayName -eq $env:EXPECTED_DISPLAY_NAME
-                  }
-              )
-
-              if ($Matches.Count -eq 0) {
-                  throw "No Intune Platform Script was found with display name '$env:EXPECTED_DISPLAY_NAME'."
-              }
-
-              if ($Matches.Count -gt 1) {
-                  throw "More than one Intune Platform Script has display name '$env:EXPECTED_DISPLAY_NAME'. Configure INTUNE_SCRIPT_ID with the correct GUID."
-              }
-
-              $ScriptId = $Matches[0].id
-              Write-Host "Resolved Intune script ID: $ScriptId"
-          }
-
-          if ($ScriptId -notmatch $GuidPattern) {
-              throw "Resolved Intune script ID is not a valid GUID: '$ScriptId'"
-          }
-
-          $Uri = 'https://graph.microsoft.com/beta/deviceManagement/deviceManagementScripts/' + $ScriptId
-
-          Write-Host 'Retrieving and verifying the existing Intune script.'
           $Current = Invoke-RestMethod `
-            -Method Get `
-            -Uri $Uri `
-            -Headers $Headers
+              -Method Get `
+              -Uri $ScriptUri `
+              -Headers $Headers
 
-          if ($Current.id -ne $ScriptId) {
-              throw 'Returned Intune script ID does not match the resolved script ID.'
+          if ([string]$Current.id -ne $ScriptId) {
+              throw 'Returned Intune script ID does not match.'
           }
 
-          if ($Current.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
-              throw "Target mismatch. Expected '$env:EXPECTED_DISPLAY_NAME', received '$($Current.displayName)'."
+          if (
+              [string]$Current.displayName -ne
+              $env:EXPECTED_DISPLAY_NAME
+          ) {
+              throw (
+                  "Target mismatch. Expected '$env:EXPECTED_DISPLAY_NAME'; " +
+                  "received '$($Current.displayName)'."
+              )
           }
 
-          $ScriptBytes = [System.IO.File]::ReadAllBytes($ScriptPath)
-          $ScriptContent = [System.Convert]::ToBase64String($ScriptBytes)
+          $ScriptBytes = [System.IO.File]::ReadAllBytes(
+              $env:GENERATED_SCRIPT_PATH
+          )
 
-          if ([System.String]::IsNullOrWhiteSpace($ScriptContent)) {
-              throw 'Generated Base64 script content is empty.'
+          if ($ScriptBytes.Length -eq 0) {
+              throw 'Generated script is empty.'
           }
+
+          $ScriptContent = [Convert]::ToBase64String($ScriptBytes)
+
+          $Description = (
+              'V Pilot GitHub-managed {0} browser policy. ' +
+              'TenantKey: {1}. Version: {2}. Commit: {3}' -f
+              $env:ORGANIZATION_NAME,
+              $env:TENANT_KEY,
+              $env:POLICY_VERSION,
+              $env:GITHUB_SHA
+          )
 
           $BodyObject = @{
-              displayName = $Current.displayName
-              description = "V Pilot GitHub-managed DigiTrans browser policy. Version: $env:POLICY_VERSION. Commit: $env:GITHUB_SHA"
-              fileName = 'DigiTrans-Browser-Control-Developer.ps1'
-              scriptContent = $ScriptContent
-              runAsAccount = 'system'
+              displayName        tion           = $Description
+              fileName              = $env:GENERATED_FILE_NAME
+              scriptContent         = $ScriptContent
+              runAsAccount          = 'system'
               enforceSignatureCheck = $false
-              runAs32Bit = $false
-              roleScopeTagIds = @('0')
+              runAs32Bit            = $false
+              roleScopeTagIds       = @('0')
           }
 
           $Body = $BodyObject | ConvertTo-Json -Depth 10
 
-          Write-Host 'Publishing the updated script to Intune.'
-          $UpdatedScript = Invoke-RestMethod `
-            -Method Patch `
-            -Uri $Uri `
-            -Headers $Headers `
-            -Body $Body
+          Write-Host 'Publishing updated script to Intune.'
 
-          if ($UpdatedScript.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
-              throw 'Microsoft Graph did not return the expected script.'
+          Invoke-RestMethod `
+              -Method Patch `
+              -Uri $ScriptUri `
+              -Headers $Headers `
+              -Body $Body |
+                  Out-Null
+
+          Write-Host 'Retrieving script after publication.'
+
+          $Published = Invoke-RestMethod `
+              -Method Get `
+              -Uri $ScriptUri `
+              -Headers $Headers
+
+          if (
+              [string]$Published.displayName -ne
+              $env:EXPECTED_DISPLAY_NAME
+          ) {
+              throw 'Published script display name verification failed.'
           }
 
-          Write-Host "Successfully updated Intune script: $($UpdatedScript.displayName)"
-          Write-Host "Intune script ID: $($UpdatedScript.id)"
-          Write-Host "Last modified: $($UpdatedScript.lastModifiedDateTime)"
+          if (
+              [string]$Published.fileName -ne
+              $env:GENERATED_FILE_NAME
+          ) {
+              throw 'Published script filename verification failed.'
+          }
 
-          "INTUNE_RESOLVED_SCRIPT_ID=$ScriptId" | Out-File `
-            -FilePath $env:GITHUB_ENV `
-            -Encoding utf8 `
-            -Append
-            
+          $LocalHash = :ToHexString(
+              [Security.Cryptography.SHA256]::HashData(
+                  $ScriptBytes
+              )
+          ).ToLowerInvariant()
+
+          if (
+              $null -ne
+              $Published.PSObject.Properties['scriptContent'] -and
+              -not :IsNullOrWhiteSpace(
+                  [string]$Published.scriptContent
+              )
+          ) {
+              $StoredBytes = :FromBase64String(
+                  [string]$Published.scriptContent
+              )
+
+              $StoredHash = :ToHexString(
+                  [Security.Cryptography.SHA256]::HashData(
+                      $StoredBytes
+                  )
+              ).ToLowerInvariant()
+
+              if ($LocalHash -ne $StoredHash) {
+                  throw (
+                      'Intune stored script does not match the ' +
+                      'generated script.'
+                  )
+              }
+
+              Write-Host 'Stored script hash verification passed.'
+          }
+          else {
+              Write-Warning (
+                  'Graph did not return scriptContent during the ' +
+                  'verification GET. Metadata verification passed.'
+              )
+          }
+
+          Write-Host (
+              "Successfully updated Intune script: " +
+              "$($Published.displayName)"
+          )
+
+          Write-Host "Intune script ID: $ScriptId"
+          Write-Host "Local SHA256: $LocalHash"
+          Write-Host (
+              "Last modified: $($Published.lastModifiedDateTime)"
+          )
+
+          "INTUNE_RESOLVED_SCRIPT_ID=$ScriptId" |
+              Out-File `
+                  -FilePath $env:GITHUB_ENV `
+                  -Encoding utf8 `
+                  -Append
+
+          "scriptId=$ScriptId" |
+              Out-File `
+                  -FilePath $env:GITHUB_OUTPUT `
+                  -Encoding utf8 `
+                  -Append
+
+          "localHash=$LocalHash" |
+              Out-File `
+                  -FilePath $env:GITHUB_OUTPUT `
+                  -Encoding utf8 `
+                  -Append
+
       - name: Trigger assigned device sync
         id: device_sync
         shell: pwsh
@@ -180,13 +381,35 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           ./tools/Sync-BrowserControlDevices.ps1 `
-            -TenantKey 'digitrans'
-            
+              -TenantKey $env:TENANT_KEY
+
       - name: Deployment summary
+        if: always()
         shell: pwsh
         run: |
-          "## DigiTrans Intune browser-policy deployment" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Tenant: DigiTrans" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Version: ${{ inputs.version }}" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Commit: $env:GITHUB_SHA" | Add-Content $env:GITHUB_STEP_SUMMARY
-          "- Target script ID: $env:INTUNE_RESOLVED_SCRIPT_ID" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "## Intune browser-policy deployment" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Tenant key: $env:TENANT_KEY" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Organization: ${{ steps.tenant.outputs.organizationName }}" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- GitHub environment: ${{ inputs.targetEnvironment }}" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Version: $env:POLICY_VERSION" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Commit: $env:GITHUB_SHA" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Target script ID: $env:INTUNE_RESOLVED_SCRIPT_ID" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Generated SHA256: ${{ steps.publish.outputs.localHash }}" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Assigned-device sync: requested" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
