@@ -1,4 +1,4 @@
-name: Publish multitenant browser control to Intune
+name: Publish Browser control to Intune
 
 on:
   workflow_dispatch:
@@ -332,7 +332,7 @@ jobs:
           }
 
           $Description = (
-              'V Pilot GitHub-managed {0} browser policy. ' +
+              'GitHub-managed {0} browser policy. ' +
               'TenantKey: {1}. Version: {2}. Commit: {3}' -f
               $env:ORGANIZATION_NAME,
               $env:TENANT_KEY,
