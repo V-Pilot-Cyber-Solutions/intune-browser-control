@@ -149,6 +149,34 @@ jobs:
           ./tools/Validate-BrowserControl.ps1 `
               -ScriptPath '${{ steps.tenant.outputs.outputPath }}'
 
+      - name: Verify publishing prerequisites
+        shell: pwsh
+        env:
+          INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
+          EXPECTED_DISPLAY_NAME: ${{ vars.INTUNE_EXPECTED_DISPLAY_NAME }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $GuidPattern = (
+              '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-' +
+              '[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' +
+              '[0-9a-fA-F]{12}$'
+          )
+
+          if ($env:INTUNE_SCRIPT_ID -notmatch $GuidPattern) {
+              throw 'INTUNE_SCRIPT_ID is missing or invalid.'
+          }
+
+          if (
+              :IsNullOrWhiteSpace(
+                  $env:EXPECTED_DISPLAY_NAME
+              )
+          ) {
+              throw 'INTUNE_EXPECTED_DISPLAY_NAME is empty.'
+          }
+
+          Write-Host 'Publishing prerequisites passed.'
+
       - name: Authenticate to tenant using OIDC
         uses: azure/login@v2
         with:
