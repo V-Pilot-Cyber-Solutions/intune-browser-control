@@ -19,7 +19,7 @@
     "chromeBrowserSigninDisabled": true,
     "chromeIncognitoDisabled": true,
     "edgeInPrivateDisabled": true,
-    "personalGoogleRestrictionsEnabled": false,
+    "personalGoogleRestrictionsEnabled": true,
     "allowLocalDevelopment": false
   },
   "configurationFiles": {
