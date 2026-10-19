@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "profileKey": "executive",
+  "displayName": "Executive Full Internet",
+  "policyVersionPrefix": "EXEC",
+  "intuneDisplayName": "GitHub - Browser Control - Executive",
+  "intuneFileName": "DigiTrans-Browser-Control-Executive.ps1",
+  "assignment": {
+    "groupIds": [
+      "9a58032e-069d-4c4f-b52f-03500056108e"
+    ],
+    "maximumDevices": 50
+  },
+  "policyControls": {
+    "defaultDeny": false,
+    "downloadRestrictions": 0,
+    "developerToolsAvailability": 2,
+    "chromeCloudAPAuthEnabled": true,
+    "chromeBrowserSigninDisabled": true,
+    "chromeIncognitoDisabled": true,
+    "edgeInPrivateDisabled": true,
+    "personalGoogleRestrictionsEnabled": false,
+    "allowLocalDevelopment": false
+  },
+  "configurationFiles": {
+    "profileAllowlist": "../config/executive/allowlist-exceptions.txt",
+    "profileBlocklist": "../config/executive/blocklist.txt"
+  }
+}
