@@ -166,6 +166,7 @@ jobs:
           GENERATED_FILE_NAME: ${{ steps.tenant.outputs.intuneFileName }}
           ORGANIZATION_NAME: ${{ steps.tenant.outputs.organizationName }}
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           if (-not (Test-Path -LiteralPath $env:GENERATED_SCRIPT_PATH)) {
@@ -179,7 +180,7 @@ jobs:
           )
 
           if (
-              [string]::IsNullOrWhiteSpace($env:INTUNE_SCRIPT_ID) -or
+              :IsNullOrWhiteSpace($env:INTUNE_SCRIPT_ID) -or
               $env:INTUNE_SCRIPT_ID -notmatch $GuidPattern
           ) {
               throw (
@@ -188,15 +189,15 @@ jobs:
               )
           }
 
-          if (
-              [string]::IsNullOrWhiteSpace(
-                  $env:EXPECTED_DISPLAY_NAME
-              )
-          ) {
+          if (:IsNullOrWhiteSpace($env:EXPECTED_DISPLAY_NAME)) {
               throw (
                   'INTUNE_EXPECTED_DISPLAY_NAME is missing from the ' +
                   'selected GitHub environment.'
               )
+          }
+
+          if (:IsNullOrWhiteSpace($env:GENERATED_FILE_NAME)) {
+              throw 'The generated Intune filename is empty.'
           }
 
           $Token = az account get-access-token `
@@ -206,7 +207,7 @@ jobs:
 
           if (
               $LASTEXITCODE -ne 0 -or
-              [string]::IsNullOrWhiteSpace($Token)
+              :IsNullOrWhiteSpace($Token)
           ) {
               throw 'Microsoft Graph access token was not returned.'
           }
@@ -245,7 +246,7 @@ jobs:
               )
           }
 
-          $ScriptBytes = [System.IO.File]::ReadAllBytes(
+          [byte[]]$ScriptBytes = [System.IO.File]::ReadAllBytes(
               $env:GENERATED_SCRIPT_PATH
           )
 
@@ -253,7 +254,11 @@ jobs:
               throw 'Generated script is empty.'
           }
 
-          $ScriptContent = [Convert]::ToBase64String($ScriptBytes)
+          $ScriptContent = :ToBase64String($ScriptBytes)
+
+          if (:IsNullOrWhiteSpace($ScriptContent)) {
+              throw 'Generated Base64 script content is empty.'
+          }
 
           $Description = (
               'V Pilot GitHub-managed {0} browser policy. ' +
@@ -265,7 +270,8 @@ jobs:
           )
 
           $BodyObject = @{
-              displayName        tion           = $Description
+              displayName           = [string]$Current.displayName
+              description           = $Description
               fileName              = $env:GENERATED_FILE_NAME
               scriptContent         = $ScriptContent
               runAsAccount          = 'system'
@@ -296,7 +302,7 @@ jobs:
               [string]$Published.displayName -ne
               $env:EXPECTED_DISPLAY_NAME
           ) {
-              throw 'Published script display name verification failed.'
+              throw 'Published script display-name verification failed.'
           }
 
           if (
@@ -306,10 +312,12 @@ jobs:
               throw 'Published script filename verification failed.'
           }
 
+          $LocalHashBytes = [Security.Cryptography.SHA256]::HashData(
+              $ScriptBytes
+          )
+
           $LocalHash = :ToHexString(
-              [Security.Cryptography.SHA256]::HashData(
-                  $ScriptBytes
-              )
+              $LocalHashBytes
           ).ToLowerInvariant()
 
           if (
@@ -319,41 +327,44 @@ jobs:
                   [string]$Published.scriptContent
               )
           ) {
-              $StoredBytes = :FromBase64String(
+              [byte[]]$StoredBytes = :FromBase64String(
                   [string]$Published.scriptContent
               )
 
+              $StoredHashBytes = [Security.Cryptography.SHA256]::HashData(
+                  $StoredBytes
+              )
+
               $StoredHash = :ToHexString(
-                  [Security.Cryptography.SHA256]::HashData(
-                      $StoredBytes
-                  )
+                  $StoredHashBytes
               ).ToLowerInvariant()
 
               if ($LocalHash -ne $StoredHash) {
                   throw (
-                      'Intune stored script does not match the ' +
-                      'generated script.'
+                      'Intune stored script does not match the generated ' +
+                      "script. Local=$LocalHash; Stored=$StoredHash"
                   )
               }
 
               Write-Host 'Stored script hash verification passed.'
+              Write-Host "Stored SHA256: $StoredHash"
           }
           else {
               Write-Warning (
-                  'Graph did not return scriptContent during the ' +
-                  'verification GET. Metadata verification passed.'
+                  'Microsoft Graph did not return scriptContent during ' +
+                  'the verification GET. Metadata verification passed.'
               )
           }
 
           Write-Host (
-              "Successfully updated Intune script: " +
-              "$($Published.displayName)"
+              'Successfully updated Intune script: {0}' -f
+              $Published.displayName
           )
-
           Write-Host "Intune script ID: $ScriptId"
           Write-Host "Local SHA256: $LocalHash"
           Write-Host (
-              "Last modified: $($Published.lastModifiedDateTime)"
+              'Last modified: {0}' -f
+              $Published.lastModifiedDateTime
           )
 
           "INTUNE_RESOLVED_SCRIPT_ID=$ScriptId" |
@@ -378,6 +389,7 @@ jobs:
         id: device_sync
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           ./tools/Sync-BrowserControlDevices.ps1 `
@@ -387,6 +399,18 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          $ScriptId = $env:INTUNE_RESOLVED_SCRIPT_ID
+
+          if (:IsNullOrWhiteSpace($ScriptId)) {
+              $ScriptId = 'Not published'
+          }
+
+          $GeneratedHash = '${{ steps.publish.outputs.localHash }}'
+
+          if (:IsNullOrWhiteSpace($GeneratedHash)) {
+              $GeneratedHash = 'Not available'
+          }
+
           "## Intune browser-policy deployment" |
               Add-Content $env:GITHUB_STEP_SUMMARY
 
@@ -405,10 +429,13 @@ jobs:
           "- Commit: $env:GITHUB_SHA" |
               Add-Content $env:GITHUB_STEP_SUMMARY
 
-          "- Target script ID: $env:INTUNE_RESOLVED_SCRIPT_ID" |
+          "- Target script ID: $ScriptId" |
               Add-Content $env:GITHUB_STEP_SUMMARY
 
-          "- Generated SHA256: ${{ steps.publish.outputs.localHash }}" |
+          "- Generated SHA256: $GeneratedHash" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+
+          "- Device sync step: ${{ steps.device_sync.outcome }}" |
               Add-Content $env:GITHUB_STEP_SUMMARY
 
           "- Assigned-device sync: requested" |
