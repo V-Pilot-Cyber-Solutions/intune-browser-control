@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tenantKey:
-        description: Tenant key matching the tenants/<tenantKey> directory
+        description: Tenant key matching a directory under tenants
         required: true
         default: digitrans
         type: string
@@ -38,16 +38,54 @@ jobs:
     env:
       TENANT_KEY: ${{ inputs.tenantKey }}
       POLICY_VERSION: ${{ inputs.version }}
-      OUTPUT_DIRECTORY: output/${{ inputs.tenantKey }}
-      OUTPUT_FILE: output/${{ inputs.tenantKey }}/Browser-Control.ps1
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check workflow for copy-paste corruption
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          $WorkflowPath = Join-Path `
+              -Path $env:GITHUB_WORKSPACE `
+              -ChildPath '.github\workflows\publish-to-intune.yml'
+
+          $Content = Get-Content `
+              -LiteralPath $WorkflowPath `
+              -Raw `
+              -Encoding UTF8
+
+          # Build signatures from fragments so this workflow does not contain
+          # the exact invalid strings that the check is intended to detect.
+          $Colon = ':'
+          $InvalidFragments = @(
+              (' ' + $Colon + 'IsNullOrWhiteSpace')
+              ('= ' + $Colon + 'ToBase64String')
+              ('= ' + $Colon + 'FromBase64String')
+              ('= ' + $Colon + 'ToHexString')
+              ('= ' + $Colon + 'HashData')
+              ('<' + 'a href=')
+              ('<' + '/a>')
+              ('<' + 'br>')
+              ('&' + 'lt;')
+              ('&' + 'gt;')
+          )
+
+          foreach ($Fragment in $InvalidFragments) {
+              if ($Content.Contains($Fragment)) {
+                  throw "Invalid workflow content detected: $Fragment"
+              }
+          }
+
+          Write-Host 'Workflow copy-paste corruption check passed.'
+
       - name: Validate workflow inputs
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           if ($env:TENANT_KEY -notmatch '^[a-z0-9-]+$') {
@@ -74,6 +112,7 @@ jobs:
         id: tenant
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           $TenantJsonPath = Join-Path `
@@ -87,18 +126,14 @@ jobs:
                   ConvertFrom-Json -ErrorAction Stop
 
           if ([string]$Tenant.tenantKey -ne $env:TENANT_KEY) {
-              throw "Tenant key mismatch in tenant.json."
+              throw 'Tenant key mismatch in tenant.json.'
           }
 
-          if ([string]::IsNullOrWhiteSpace(
-              [string]$Tenant.organizationName
-          )) {
+          if ([string]::IsNullOrWhiteSpace([string]$Tenant.organizationName)) {
               throw 'organizationName is missing from tenant.json.'
           }
 
-          if ([string]::IsNullOrWhiteSpace(
-              [string]$Tenant.intuneFileName
-          )) {
+          if ([string]::IsNullOrWhiteSpace([string]$Tenant.intuneFileName)) {
               throw 'intuneFileName is missing from tenant.json.'
           }
 
@@ -111,22 +146,13 @@ jobs:
               -ChildPath ([string]$Tenant.intuneFileName)
 
           "organizationName=$($Tenant.organizationName)" |
-              Out-File `
-                  -FilePath $env:GITHUB_OUTPUT `
-                  -Encoding utf8 `
-                  -Append
+              Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           "intuneFileName=$($Tenant.intuneFileName)" |
-              Out-File `
-                  -FilePath $env:GITHUB_OUTPUT `
-                  -Encoding utf8 `
-                  -Append
+              Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           "outputPath=$OutputPath" |
-              Out-File `
-                  -FilePath $env:GITHUB_OUTPUT `
-                  -Encoding utf8 `
-                  -Append
+              Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           Write-Host "Tenant: $($Tenant.organizationName)"
           Write-Host "Output: $OutputPath"
@@ -134,6 +160,7 @@ jobs:
       - name: Build tenant policy
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           ./tools/Build-BrowserControl.ps1 `
@@ -144,6 +171,7 @@ jobs:
       - name: Validate tenant policy
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           ./tools/Validate-BrowserControl.ps1 `
@@ -154,7 +182,10 @@ jobs:
         env:
           INTUNE_SCRIPT_ID: ${{ vars.INTUNE_SCRIPT_ID }}
           EXPECTED_DISPLAY_NAME: ${{ vars.INTUNE_EXPECTED_DISPLAY_NAME }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
         run: |
+          Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
           $GuidPattern = (
@@ -163,19 +194,34 @@ jobs:
               '[0-9a-fA-F]{12}$'
           )
 
-          if ($env:INTUNE_SCRIPT_ID -notmatch $GuidPattern) {
+          if (
+              [string]::IsNullOrWhiteSpace($env:INTUNE_SCRIPT_ID) -or
+              $env:INTUNE_SCRIPT_ID -notmatch $GuidPattern
+          ) {
               throw 'INTUNE_SCRIPT_ID is missing or invalid.'
           }
 
-          if (
-              :IsNullOrWhiteSpace(
-                  $env:EXPECTED_DISPLAY_NAME
-              )
-          ) {
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_DISPLAY_NAME)) {
               throw 'INTUNE_EXPECTED_DISPLAY_NAME is empty.'
           }
 
+          if (
+              [string]::IsNullOrWhiteSpace($env:AZURE_CLIENT_ID) -or
+              $env:AZURE_CLIENT_ID -notmatch $GuidPattern
+          ) {
+              throw 'AZURE_CLIENT_ID is missing or invalid.'
+          }
+
+          if (
+              [string]::IsNullOrWhiteSpace($env:AZURE_TENANT_ID) -or
+              $env:AZURE_TENANT_ID -notmatch $GuidPattern
+          ) {
+              throw 'AZURE_TENANT_ID is missing or invalid.'
+          }
+
           Write-Host 'Publishing prerequisites passed.'
+          Write-Host "Intune script ID: $env:INTUNE_SCRIPT_ID"
+          Write-Host "Expected display name: $env:EXPECTED_DISPLAY_NAME"
 
       - name: Authenticate to tenant using OIDC
         uses: azure/login@v2
@@ -208,7 +254,7 @@ jobs:
           )
 
           if (
-              :IsNullOrWhiteSpace($env:INTUNE_SCRIPT_ID) -or
+              [string]::IsNullOrWhiteSpace($env:INTUNE_SCRIPT_ID) -or
               $env:INTUNE_SCRIPT_ID -notmatch $GuidPattern
           ) {
               throw (
@@ -217,14 +263,14 @@ jobs:
               )
           }
 
-          if (:IsNullOrWhiteSpace($env:EXPECTED_DISPLAY_NAME)) {
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_DISPLAY_NAME)) {
               throw (
                   'INTUNE_EXPECTED_DISPLAY_NAME is missing from the ' +
                   'selected GitHub environment.'
               )
           }
 
-          if (:IsNullOrWhiteSpace($env:GENERATED_FILE_NAME)) {
+          if ([string]::IsNullOrWhiteSpace($env:GENERATED_FILE_NAME)) {
               throw 'The generated Intune filename is empty.'
           }
 
@@ -235,7 +281,7 @@ jobs:
 
           if (
               $LASTEXITCODE -ne 0 -or
-              :IsNullOrWhiteSpace($Token)
+              [string]::IsNullOrWhiteSpace($Token)
           ) {
               throw 'Microsoft Graph access token was not returned.'
           }
@@ -264,10 +310,7 @@ jobs:
               throw 'Returned Intune script ID does not match.'
           }
 
-          if (
-              [string]$Current.displayName -ne
-              $env:EXPECTED_DISPLAY_NAME
-          ) {
+          if ([string]$Current.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
               throw (
                   "Target mismatch. Expected '$env:EXPECTED_DISPLAY_NAME'; " +
                   "received '$($Current.displayName)'."
@@ -282,9 +325,9 @@ jobs:
               throw 'Generated script is empty.'
           }
 
-          $ScriptContent = :ToBase64String($ScriptBytes)
+          $ScriptContent = [Convert]::ToBase64String($ScriptBytes)
 
-          if (:IsNullOrWhiteSpace($ScriptContent)) {
+          if ([string]::IsNullOrWhiteSpace($ScriptContent)) {
               throw 'Generated Base64 script content is empty.'
           }
 
@@ -326,17 +369,11 @@ jobs:
               -Uri $ScriptUri `
               -Headers $Headers
 
-          if (
-              [string]$Published.displayName -ne
-              $env:EXPECTED_DISPLAY_NAME
-          ) {
+          if ([string]$Published.displayName -ne $env:EXPECTED_DISPLAY_NAME) {
               throw 'Published script display-name verification failed.'
           }
 
-          if (
-              [string]$Published.fileName -ne
-              $env:GENERATED_FILE_NAME
-          ) {
+          if ([string]$Published.fileName -ne $env:GENERATED_FILE_NAME) {
               throw 'Published script filename verification failed.'
           }
 
@@ -344,18 +381,21 @@ jobs:
               $ScriptBytes
           )
 
-          $LocalHash = :ToHexString(
+          $LocalHash = [Convert]::ToHexString(
               $LocalHashBytes
           ).ToLowerInvariant()
 
+          $ScriptContentProperty = $Published.PSObject.Properties[
+              'scriptContent'
+          ]
+
           if (
-              $null -ne
-              $Published.PSObject.Properties['scriptContent'] -and
-              -not :IsNullOrWhiteSpace(
+              $null -ne $ScriptContentProperty -and
+              -not [string]::IsNullOrWhiteSpace(
                   [string]$Published.scriptContent
               )
           ) {
-              [byte[]]$StoredBytes = :FromBase64String(
+              [byte[]]$StoredBytes = [Convert]::FromBase64String(
                   [string]$Published.scriptContent
               )
 
@@ -363,7 +403,7 @@ jobs:
                   $StoredBytes
               )
 
-              $StoredHash = :ToHexString(
+              $StoredHash = [Convert]::ToHexString(
                   $StoredHashBytes
               ).ToLowerInvariant()
 
@@ -427,16 +467,24 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
+
           $ScriptId = $env:INTUNE_RESOLVED_SCRIPT_ID
 
-          if (:IsNullOrWhiteSpace($ScriptId)) {
+          if ([string]::IsNullOrWhiteSpace($ScriptId)) {
               $ScriptId = 'Not published'
           }
 
           $GeneratedHash = '${{ steps.publish.outputs.localHash }}'
 
-          if (:IsNullOrWhiteSpace($GeneratedHash)) {
+          if ([string]::IsNullOrWhiteSpace($GeneratedHash)) {
               $GeneratedHash = 'Not available'
+          }
+
+          $DeviceSyncOutcome = '${{ steps.device_sync.outcome }}'
+
+          if ([string]::IsNullOrWhiteSpace($DeviceSyncOutcome)) {
+              $DeviceSyncOutcome = 'not-run'
           }
 
           "## Intune browser-policy deployment" |
@@ -463,8 +511,5 @@ jobs:
           "- Generated SHA256: $GeneratedHash" |
               Add-Content $env:GITHUB_STEP_SUMMARY
 
-          "- Device sync step: ${{ steps.device_sync.outcome }}" |
-              Add-Content $env:GITHUB_STEP_SUMMARY
-
-          "- Assigned-device sync: requested" |
+          "- Device sync step: $DeviceSyncOutcome" |
               Add-Content $env:GITHUB_STEP_SUMMARY
