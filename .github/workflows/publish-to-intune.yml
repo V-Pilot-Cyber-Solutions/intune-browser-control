@@ -172,7 +172,16 @@ jobs:
             -FilePath $env:GITHUB_ENV `
             -Encoding utf8 `
             -Append
+            
+      - name: Trigger assigned device sync
+        id: device_sync
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
 
+          ./tools/Sync-BrowserControlDevices.ps1 `
+            -TenantKey 'digitrans'
+            
       - name: Deployment summary
         shell: pwsh
         run: |
