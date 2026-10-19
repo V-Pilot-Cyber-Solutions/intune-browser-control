@@ -189,16 +189,54 @@ foreach ($GroupId in $GroupIds) {
     )
 
     [object[]]$GroupDevices = @(Get-GraphCollection -Uri $MembersUri)
-    Write-Output ('Resolved {0} Entra devices from group {1}.' -f $GroupDevices.Count, $GroupId)
-    $EntraDeviceObjects += $GroupDevices
+    Write-Output ('Resolved {0} Entra device objects from group {1}.' -f $GroupDevices.Count, $GroupId)
+
+    [object[]]$LimitedDeviceObjects = @(
+        $GroupDevices |
+            Where-Object {
+                [string]::IsNullOrWhiteSpace([string]$_.deviceId)
+            }
+    )
+
+    if ($LimitedDeviceObjects.Count -gt 0) {
+        [string[]]$LimitedIds = @(
+            $LimitedDeviceObjects |
+                ForEach-Object { [string]$_.id } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+
+        throw (
+            'Microsoft Graph returned limited-information device objects. ' +
+            'The deviceId property is unavailable. Grant the GitHub OIDC ' +
+            'application the Microsoft Graph Application permission ' +
+            'Device.Read.All, grant tenant admin consent, and rerun. ' +
+            'Directory object IDs: ' + ($LimitedIds -join ', ')
+        )
+    }
+
+    [object[]]$EnabledGroupDevices = @(
+        $GroupDevices |
+            Where-Object {
+                $_.accountEnabled -ne $false
+            }
+    )
+
+    [int]$DisabledCount = $GroupDevices.Count - $EnabledGroupDevices.Count
+    Write-Output (
+        'Usable enabled devices from group {0}: {1}; Disabled: {2}' -f
+        $GroupId,
+        $EnabledGroupDevices.Count,
+        $DisabledCount
+    )
+
+    $EntraDeviceObjects += $EnabledGroupDevices
 }
 
 $EntraDeviceObjects = @(
     $EntraDeviceObjects |
         Where-Object {
             $null -ne $_.deviceId -and
-            -not [string]::IsNullOrWhiteSpace([string]$_.deviceId) -and
-            $_.accountEnabled -ne $false
+            -not [string]::IsNullOrWhiteSpace([string]$_.deviceId)
         } |
         Sort-Object -Property deviceId -Unique
 )
