@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "profileKey": "temporary-internet",
+  "displayName": "Temporary Full Internet",
+  "policyVersionPrefix": "TMP",
+  "intuneDisplayName": "GitHub - Browser Control - Temporary Internet",
+  "intuneFileName": "DigiTrans-Browser-Control-Temporary-Internet.ps1",
+  "assignment": {
+    "groupIds": [
+      "TEMPORARY-INTERNET-DEVICE-GROUP-OBJECT-ID"
+    ],
+    "maximumDevices": 50
+  },
+  "policyControls": {
+    "defaultDeny": false,
+    "downloadRestrictions": 0,
+    "developerToolsAvailability": 2,
+    "chromeCloudAPAuthEnabled": true,
+    "chromeBrowserSigninDisabled": true,
+    "chromeIncognitoDisabled": true,
+    "edgeInPrivateDisabled": true,
+    "personalGoogleRestrictionsEnabled": true,
+    "allowLocalDevelopment": false,
+    "temporaryAccess": true,
+    "maximumAccessHours": 8
+  },
+  "configurationFiles": {
+    "profileAllowlist": "../config/temporary-internet/allowlist-exceptions.txt",
+    "profileBlocklist": "../config/temporary-internet/blocklist.txt",
+    "googlePersonalBlocklist": "../config/shared/google-personal-blocklist.txt"
+  }
+}
