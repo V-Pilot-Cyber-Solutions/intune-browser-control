@@ -104,6 +104,7 @@ storage.azure.com
 storage.azure.net
 vault.azure.net
 web.purview.azure.com
+facebook.com
 
 # ============================================================================
 # Windows Update, Office CDN and Microsoft Infrastructure (28)
