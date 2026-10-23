@@ -111,6 +111,7 @@ prodsecops.com
 5pilot.com
 mail.google.com
 gmail.com
+accounts.google.co.in
 accounts.google.com
 
 # ============================================================================
