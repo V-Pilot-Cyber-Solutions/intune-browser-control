@@ -106,6 +106,9 @@ vault.azure.net
 web.purview.azure.com
 pocketfm.com
 vpilot.org
+pudica.io
+prodsecops.com
+5pilot.com
 
 # ============================================================================
 # Windows Update, Office CDN and Microsoft Infrastructure (28)
