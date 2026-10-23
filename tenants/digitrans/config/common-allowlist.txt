@@ -109,10 +109,7 @@ vpilot.org
 pudica.io
 prodsecops.com
 5pilot.com
-mail.google.com
-gmail.com
-accounts.google.co.in
-accounts.google.com
+
 
 # ============================================================================
 # Windows Update, Office CDN and Microsoft Infrastructure (28)
