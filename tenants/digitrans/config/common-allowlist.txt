@@ -213,6 +213,7 @@ dl.pstmn.io
 docker.com
 docs.docker.com
 getpostman.com
+web.postman.co
 github.com
 githubassets.com
 identity.getpostman.com
