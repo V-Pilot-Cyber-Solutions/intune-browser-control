@@ -63,6 +63,7 @@ securitycenter.microsoft.com
 service.protection.outlook.com
 sharepoint.com
 sharepointonline.com
+ftp.ext.hp.com
 
 # ============================================================================
 # Azure, Intune, Security and Management (37)
