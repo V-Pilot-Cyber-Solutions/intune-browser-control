@@ -62,7 +62,7 @@ security.microsoft.com
 securitycenter.microsoft.com
 service.protection.outlook.com
 sharepoint.com
-zaingroup-my.sharepoint.com
+urldefense.com
 sharepointonline.com
 ftp.ext.hp.com
 hpia.hpcloud.hp.com
