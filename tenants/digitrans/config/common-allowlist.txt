@@ -161,6 +161,7 @@ clients4.google.com
 colab.research.google.com
 gstatic.com
 www.google.com
+support.google.com
 googleapis.com
 googletagmanager.com
 stitch.withgoogle.com
