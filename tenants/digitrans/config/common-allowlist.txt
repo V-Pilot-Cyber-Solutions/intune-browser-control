@@ -475,3 +475,4 @@ stamptls2.directdlm.com
 storage.live.com
 windows.net
 youtube.com
+ams--eurcrmlivesg622.crm4.dynamics.com
