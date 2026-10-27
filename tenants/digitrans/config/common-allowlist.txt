@@ -294,6 +294,7 @@ mawaridholding.freshservice.com
 mawaridholding.myfreshworks.com
 myfreshworks.com
 webpush.freshchat.com
+saudia.com
 
 # ============================================================================
 # Security, Password Management, VPN and Trust Services (19)
