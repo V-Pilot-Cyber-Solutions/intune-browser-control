@@ -6,5 +6,6 @@ postman://*
 blob:*
 data:*
 file:*
+slack:*
 devtools://*
 view-source:*
