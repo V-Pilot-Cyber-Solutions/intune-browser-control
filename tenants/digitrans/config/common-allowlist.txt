@@ -117,6 +117,9 @@ api.juspay.in
 pg-transport.phonepe.com
 crqsbiacs.sbi.bank.in
 sbi.bank.in
+atlassian.net
+atlassian.com
+ajlanbrosbank.atlassian.net
 idassian.com.atl
 id.atlassian.com
 home.atlassian.com
