@@ -111,7 +111,6 @@ vpilot.org
 pudica.io
 prodsecops.com
 5pilot.com
-pocketfm.com
 payments.juspay.in
 api.juspay.in
 pg-transport.phonepe.com
