@@ -122,6 +122,8 @@ ajlanbrosbank.atlassian.net
 idassian.com.atl
 id.atlassian.com
 home.atlassian.com
+hcm.bajajgeneral.com
+bajajgeneral.com
 
 
 # ============================================================================
